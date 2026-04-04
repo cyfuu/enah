@@ -22,12 +22,10 @@ export class Game extends Scene {
 
     private player: Phaser.Physics.Arcade.Sprite;
     private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
-    
     private popupText: Phaser.GameObjects.Text;
     private interactKey: Phaser.Input.Keyboard.Key;
     private interactGroup: Phaser.Physics.Arcade.StaticGroup;
     private activeInteractName: string | null = null;
-    
     private isInteracting: boolean = false;
 
     create() {
@@ -64,20 +62,39 @@ export class Game extends Scene {
             this.player.body.setOffset(32, 85);
         }
 
-        this.interactGroup = this.physics.add.staticGroup();
+        const hasPlayed = localStorage.getItem('hasPlayed');
+        if (!hasPlayed) {
+            const tutorialText = this.add.text(this.player.x, this.player.y - 25, 
+                "Hey! Check the paper on the floor first... ❤️", {
+                fontSize: '32px',
+                fontFamily: 'Arial',
+                color: '#ffffff',
+                backgroundColor: '#000000aa',
+                padding: { x: 10, y: 5 }
+            }).setOrigin(0.5).setScale(0.15).setDepth(100);
 
+            this.tweens.add({
+                targets: tutorialText,
+                alpha: 0,
+                duration: 5000,
+                delay: 3000,
+                onComplete: () => {
+                    tutorialText.destroy();
+                    localStorage.setItem('hasPlayed', 'true');
+                }
+            });
+        }
+
+        this.interactGroup = this.physics.add.staticGroup();
         const interactLayer = map.getObjectLayer('Interactables');
         
         if (interactLayer && interactLayer.objects) {
             interactLayer.objects.forEach(obj => {
                 const x = obj.x! + (obj.width! / 2);
                 const y = obj.y! + (obj.height! / 2);
-                
                 const zone = this.add.zone(x, y, obj.width!, obj.height!);
                 this.physics.add.existing(zone, true);
-                
                 zone.setData('name', obj.name);
-                
                 this.interactGroup.add(zone);
             });
         }
@@ -89,10 +106,7 @@ export class Game extends Scene {
             backgroundColor: '#000000bb',
             padding: { x: 15, y: 10 }
         });
-        this.popupText.setOrigin(0.5); 
-        this.popupText.setScale(0.15);
-        this.popupText.setDepth(1000);
-        this.popupText.setVisible(false);
+        this.popupText.setOrigin(0.5).setScale(0.15).setDepth(1000).setVisible(false);
 
         if (this.input.keyboard) {
             this.cursors = this.input.keyboard.createCursorKeys();
@@ -110,9 +124,7 @@ export class Game extends Scene {
         if (grassLayer) grassLayer.setDepth(1);
         if (hillsLayer) hillsLayer.setDepth(2);
         if (objectsBase) objectsBase.setDepth(2);
-        
         this.player.setDepth(10);
-        
         if (objectsTop) objectsTop.setDepth(20);
 
         if (hillsLayer) hillsLayer.setCollisionByProperty({ collides: true });
@@ -138,31 +150,23 @@ export class Game extends Scene {
     }
 
     update() {
-        if (!this.cursors || !this.player) return;
-
-        if (this.isInteracting) return;
+        if (!this.cursors || !this.player || this.isInteracting) return;
 
         this.activeInteractName = null;
-
         this.physics.overlap(this.player, this.interactGroup, (_player, zone) => {
             const z = zone as Phaser.GameObjects.Zone;
             this.activeInteractName = z.getData('name');
-        
             this.popupText.setPosition(this.player.x, this.player.y - 25);
         });
 
         if (this.activeInteractName) {
             this.popupText.setVisible(true);
-
-            if (Phaser.Input.Keyboard.JustDown(this.interactKey) && !this.isInteracting) {
-                
+            if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
                 if (this.activeInteractName === 'readPaper') {
                     this.popupText.setVisible(false); 
                     EventBus.emit('open-paper');
-                    
                 } else if (this.activeInteractName === 'openGallery') {
                     this.popupText.setText("Press E to View Gallery");
-                    
                 } else if (this.activeInteractName === 'openDiary') {
                     this.popupText.setText("Press E to Read Diary");
                 }
@@ -172,7 +176,6 @@ export class Game extends Scene {
             this.popupText.setText("Press E to interact");
         }
 
-        this.player.setDepth(10);
         const speed = 80;
         this.player.setVelocity(0);
 
@@ -195,15 +198,11 @@ export class Game extends Scene {
 
         if (upDown) {
             this.player.setVelocityY(-speed);
-            if (!leftDown && !rightDown) {
-                this.player.anims.play('walk-up', true);
-            }
+            if (!leftDown && !rightDown) this.player.anims.play('walk-up', true);
             isMoving = true;
         } else if (downDown) {
             this.player.setVelocityY(speed);
-            if (!leftDown && !rightDown) {
-                this.player.anims.play('walk-down', true);
-            }
+            if (!leftDown && !rightDown) this.player.anims.play('walk-down', true);
             isMoving = true;
         }
 
