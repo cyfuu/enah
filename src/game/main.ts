@@ -3,7 +3,6 @@ import { Game } from './scenes/Game';
 
 const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
-    parent: 'game-container',
     backgroundColor: '#9bd4c3',
     pixelArt: true,
     
@@ -12,6 +11,7 @@ const config: Phaser.Types.Core.GameConfig = {
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: 1024, 
         height: 768,
+        parent: 'game-container'
     },
     
     physics: {
@@ -23,4 +23,8 @@ const config: Phaser.Types.Core.GameConfig = {
     scene: [Game] 
 };
 
-export default new Phaser.Game(config);
+const StartGame = (parent: string) => {
+    return new Phaser.Game({ ...config, parent: parent });
+};
+
+export default StartGame;

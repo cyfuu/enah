@@ -1,4 +1,5 @@
 import { Scene } from 'phaser';
+import { EventBus } from '../EventBus';
 
 export class Game extends Scene {
     constructor() {
@@ -7,7 +8,6 @@ export class Game extends Scene {
 
     preload() {
         this.load.tilemapTiledJSON('galleryMap', 'assets/map/gallery-map.json');
-
         this.load.image('floorImage', 'assets/map/floor.png');
         this.load.image('hillsImage', 'assets/map/hills.png');
         this.load.image('waterImage', 'assets/map/water.png');
@@ -27,6 +27,8 @@ export class Game extends Scene {
     private interactKey: Phaser.Input.Keyboard.Key;
     private interactGroup: Phaser.Physics.Arcade.StaticGroup;
     private activeInteractName: string | null = null;
+    
+    private isInteracting: boolean = false;
 
     create() {
         const map = this.make.tilemap({ key: 'galleryMap' });
@@ -80,13 +82,15 @@ export class Game extends Scene {
             });
         }
 
-        this.popupText = this.add.text(0, 0, 'Press E to read', {
-            fontSize: '12px',
-            color: '#000000',
-            backgroundColor: '#ffffff',
-            padding: { x: 5, y: 5 }
+        this.popupText = this.add.text(0, 0, 'Press E to interact', {
+            fontSize: '48px',
+            fontFamily: 'Arial',
+            color: '#ffffff',
+            backgroundColor: '#000000bb',
+            padding: { x: 15, y: 10 }
         });
         this.popupText.setOrigin(0.5); 
+        this.popupText.setScale(0.15);
         this.popupText.setDepth(1000);
         this.popupText.setVisible(false);
 
@@ -121,33 +125,46 @@ export class Game extends Scene {
         this.cameras.main.setZoom(3);
         this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
         this.cameras.main.setBackgroundColor('#9bd4c3');
+
+        EventBus.on('interaction-start', () => {
+            this.isInteracting = true;
+            if (this.player.body) this.player.setVelocity(0);
+            this.player.anims.stop();
+        });
+
+        EventBus.on('interaction-end', () => {
+            this.isInteracting = false;
+        });
     }
 
     update() {
         if (!this.cursors || !this.player) return;
+
+        if (this.isInteracting) return;
 
         this.activeInteractName = null;
 
         this.physics.overlap(this.player, this.interactGroup, (_player, zone) => {
             const z = zone as Phaser.GameObjects.Zone;
             this.activeInteractName = z.getData('name');
-            
-            this.popupText.setPosition(this.player.x, this.player.y - 60);
+        
+            this.popupText.setPosition(this.player.x, this.player.y - 25);
         });
 
         if (this.activeInteractName) {
             this.popupText.setVisible(true);
 
-            if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+            if (Phaser.Input.Keyboard.JustDown(this.interactKey) && !this.isInteracting) {
                 
                 if (this.activeInteractName === 'readPaper') {
-                    this.popupText.setText("Happy Anniversary! Read this to begin our journey...");
+                    this.popupText.setVisible(false); 
+                    EventBus.emit('open-paper');
                     
                 } else if (this.activeInteractName === 'openGallery') {
-                    this.popupText.setText("Opening Photo Gallery...");
+                    this.popupText.setText("Press E to View Gallery");
                     
                 } else if (this.activeInteractName === 'openDiary') {
-                    this.popupText.setText("Opening Diary...");
+                    this.popupText.setText("Press E to Read Diary");
                 }
             }
         } else {

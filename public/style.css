@@ -1,8 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 body {
     margin: 0;
     padding: 0;
     display: flex;
+    justify-content: center;
     align-items: center;
     height: 100vh;
+    width: 100vw;
     background-color: #242424;
+    overflow: hidden;
+}
+
+#root, #app {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.ui-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.letter-container {
+    background: #ffffff;
+    padding: 30px;
+    
+    border: 4px solid #000;
+    outline: 4px solid #ffffff;
+    outline-offset: -8px; 
+    
+    max-width: 450px;
+    text-align: center;
+    
+    font-family: 'Press Start 2P', cursive;
+    color: #3e2731;
+    line-height: 1.6;
+    
+    image-rendering: pixelated;
+    font-smooth: never;
+    -webkit-font-smoothing: none;
+}
+
+.letter-container h2 {
+    font-size: 18px;
+    margin-bottom: 25px;
+    color: #ac3232;
+}
+
+.letter-container p {
+    font-size: 10px;
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.close-btn {
+    margin-top: 10px;
+    padding: 12px 20px;
+    background-color: #5b6ee1; 
+    color: white;
+    border: 4px solid #000;
+    font-family: inherit;
+    font-size: 8px;
+    cursor: pointer;
+    box-shadow: inset -4px -4px 0px 0px #3f3f74;
+}
+
+.close-btn:hover {
+    background-color: #639bff;
+}
+
+.close-btn:active {
+    box-shadow: inset 4px 4px 0px 0px #3f3f74;
 }
