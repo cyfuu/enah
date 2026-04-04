@@ -118,6 +118,11 @@ export class Game extends Scene {
         this.anims.create({ key: 'walk-right', frames: this.anims.generateFrameNumbers('player', { start: 6, end: 8 }), frameRate: 10, repeat: -1 });
         this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('player', { start: 9, end: 11 }), frameRate: 10, repeat: -1 });
 
+        this.anims.create({ key: 'walk-down-left', frames: this.anims.generateFrameNumbers('player', { start: 12, end: 14 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-down-right', frames: this.anims.generateFrameNumbers('player', { start: 15, end: 17 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-up-left', frames: this.anims.generateFrameNumbers('player', { start: 18, end: 20 }), frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'walk-up-right', frames: this.anims.generateFrameNumbers('player', { start: 21, end: 23 }), frameRate: 10, repeat: -1 });
+
         const objectsTop = map.createLayer('Objects-Top', allTilesets, 0, 0);
 
         if (waterLayer) waterLayer.setDepth(0);
@@ -177,46 +182,54 @@ export class Game extends Scene {
         }
 
         const speed = 80;
-        this.player.setVelocity(0);
+        let vx = 0;
+        let vy = 0;
 
         const leftDown = this.cursors.left?.isDown || this.input.keyboard?.addKey('A').isDown;
         const rightDown = this.cursors.right?.isDown || this.input.keyboard?.addKey('D').isDown;
         const upDown = this.cursors.up?.isDown || this.input.keyboard?.addKey('W').isDown;
         const downDown = this.cursors.down?.isDown || this.input.keyboard?.addKey('S').isDown;
 
-        let isMoving = false;
+        if (leftDown) vx = -speed;
+        else if (rightDown) vx = speed;
 
-        if (leftDown) {
-            this.player.setVelocityX(-speed);
-            this.player.anims.play('walk-left', true);
-            isMoving = true;
-        } else if (rightDown) {
-            this.player.setVelocityX(speed);
-            this.player.anims.play('walk-right', true);
-            isMoving = true;
+        if (upDown) vy = -speed;
+        else if (downDown) vy = speed;
+
+        this.player.setVelocity(vx, vy);
+
+        if (vx !== 0 && vy !== 0) {
+            this.player.body?.velocity.normalize().scale(speed);
         }
 
-        if (upDown) {
-            this.player.setVelocityY(-speed);
-            if (!leftDown && !rightDown) this.player.anims.play('walk-up', true);
-            isMoving = true;
-        } else if (downDown) {
-            this.player.setVelocityY(speed);
-            if (!leftDown && !rightDown) this.player.anims.play('walk-down', true);
-            isMoving = true;
-        }
+        let animKey = '';
 
-        if (!isMoving) {
+        if (vx === 0 && vy === 0) {
+            const current = this.player.anims.currentAnim?.key;
             this.player.anims.stop();
-            const currentAnim = this.player.anims.currentAnim?.key;
-            if (currentAnim === 'walk-down') this.player.setFrame(1);
-            else if (currentAnim === 'walk-left') this.player.setFrame(4);
-            else if (currentAnim === 'walk-right') this.player.setFrame(7);
-            else if (currentAnim === 'walk-up') this.player.setFrame(10);
-        }
+            if (current === 'walk-down') this.player.setFrame(1);
+            else if (current === 'walk-left') this.player.setFrame(4);
+            else if (current === 'walk-right') this.player.setFrame(7);
+            else if (current === 'walk-up') this.player.setFrame(10);
+            else if (current === 'walk-down-left') this.player.setFrame(13);
+            else if (current === 'walk-down-right') this.player.setFrame(16);
+            else if (current === 'walk-up-left') this.player.setFrame(19);
+            else if (current === 'walk-up-right') this.player.setFrame(22);
+        } else {
+            if (vy > 0) {
+                if (vx < 0) animKey = 'walk-down-left';
+                else if (vx > 0) animKey = 'walk-down-right';
+                else animKey = 'walk-down';
+            } else if (vy < 0) {
+                if (vx < 0) animKey = 'walk-up-left';
+                else if (vx > 0) animKey = 'walk-up-right';
+                else animKey = 'walk-up';
+            } else {
+                if (vx < 0) animKey = 'walk-left';
+                else if (vx > 0) animKey = 'walk-right';
+            }
 
-        if (this.player.body) {
-            this.player.body.velocity.normalize().scale(speed);
+            if (animKey) this.player.anims.play(animKey, true);
         }
     }
 }
