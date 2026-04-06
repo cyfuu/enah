@@ -18,6 +18,8 @@ export class Game extends Scene {
             frameWidth: 114,
             frameHeight: 114
         });
+
+        this.load.audio('bg-music', 'assets/audio/background-music.mp3');
     }
 
     private player: Phaser.Physics.Arcade.Sprite;
@@ -152,6 +154,19 @@ export class Game extends Scene {
         EventBus.on('interaction-end', () => {
             this.isInteracting = false;
         });
+
+        const music = this.sound.add('bg-music', { 
+            volume: 0.3, 
+            loop: true 
+        });
+
+        if (this.sound.locked) {
+            this.sound.once('unlocked', () => {
+                music.play();
+            });
+        } else {
+            music.play();
+        }
     }
 
     update() {
