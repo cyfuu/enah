@@ -188,7 +188,8 @@ export class Game extends Scene {
                 } else if (this.activeInteractName === 'openGallery') {
                     this.popupText.setText("Press E to View Gallery");
                 } else if (this.activeInteractName === 'openDiary') {
-                    this.popupText.setText("Press E to Read Diary");
+                    this.popupText.setVisible(false);
+                    EventBus.emit('open-diary');
                 }
             }
         } else {

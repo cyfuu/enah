@@ -29,7 +29,7 @@ export const LetterUI = ({ onClose }: { onClose: () => void }) => {
                 <h2>HAPPY ANNIVERSARY!</h2>
                 <p>
                     MY ENAH, <br/><br/>
-                    WELCOME TO OUR SPECIAL GALLERY. I BUILT THIS LITTLE WORLD JUST FOR US. <br/><br/>
+                    WELCOME TO OUR SPECIAL PLACE. I BUILT THIS LITTLE WORLD JUST FOR US. <br/><br/>
                     TAKE YOUR TIME, EXPLORE AROUND, AND I HOPE YOU LOVE IT AS MUCH AS I LOVE YOU.
                 </p>
                 

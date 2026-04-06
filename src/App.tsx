@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { IRefPhaserGame, PhaserGame } from './PhaserGame';
 import { EventBus } from '../src/game/EventBus';
 import { LetterUI } from './components/LetterUI';
+import { DiaryUI } from './components/DiaryUI';
 import { Login } from './components/Login';
 
 function App() {
     const phaserRef = useRef<IRefPhaserGame | null>(null);
     const [showLetter, setShowLetter] = useState(false);
+    const [showDiary, setShowDiary] = useState(false);
     const [isAuthed, setIsAuthed] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
 
@@ -18,13 +20,24 @@ function App() {
             EventBus.emit('interaction-start');
         });
 
+        EventBus.on('open-diary', () => {
+            setShowDiary(true);
+            EventBus.emit('interaction-start');
+        });
+
         return () => {
             EventBus.removeListener('open-paper');
+            EventBus.removeListener('open-diary');
         };
     }, [isAuthed]);
 
     const handleCloseLetter = () => {
         setShowLetter(false);
+        EventBus.emit('interaction-end');
+    };
+
+    const handleCloseDiary = () => {
+        setShowDiary(false);
         EventBus.emit('interaction-end');
     };
 
@@ -84,6 +97,7 @@ function App() {
             </button>
 
             {showLetter && <LetterUI onClose={handleCloseLetter} />}
+            {showDiary && <DiaryUI onClose={handleCloseDiary} />}
         </div>
     );
 }
