@@ -3,12 +3,14 @@ import { IRefPhaserGame, PhaserGame } from './PhaserGame';
 import { EventBus } from '../src/game/EventBus';
 import { LetterUI } from './components/LetterUI';
 import { DiaryUI } from './components/DiaryUI';
+import { GalleryUI } from './components/GalleryUI';
 import { Login } from './components/Login';
 
 function App() {
     const phaserRef = useRef<IRefPhaserGame | null>(null);
     const [showLetter, setShowLetter] = useState(false);
     const [showDiary, setShowDiary] = useState(false);
+    const [showGallery, setShowGallery] = useState(false);
     const [isAuthed, setIsAuthed] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
 
@@ -25,9 +27,14 @@ function App() {
             EventBus.emit('interaction-start');
         });
 
+        EventBus.on('open-gallery', () => {
+            setShowGallery(true);
+            EventBus.emit('interaction-start');
+        });
         return () => {
             EventBus.removeListener('open-paper');
             EventBus.removeListener('open-diary');
+            EventBus.removeListener('open-gallery');
         };
     }, [isAuthed]);
 
@@ -40,7 +47,11 @@ function App() {
         setShowDiary(false);
         EventBus.emit('interaction-end');
     };
-
+    
+    const handleCloseGallery = () => {
+        setShowGallery(false);
+        EventBus.emit('interaction-end');
+    };
     const toggleMute = () => {
         const newMuteState = !isMuted;
         setIsMuted(newMuteState);
@@ -98,6 +109,7 @@ function App() {
 
             {showLetter && <LetterUI onClose={handleCloseLetter} />}
             {showDiary && <DiaryUI onClose={handleCloseDiary} />}
+            {showGallery && <GalleryUI onClose={handleCloseGallery} />}
         </div>
     );
 }

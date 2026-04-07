@@ -156,7 +156,7 @@ export class Game extends Scene {
         });
 
         const music = this.sound.add('bg-music', { 
-            volume: 0.3, 
+            volume: 0.5, 
             loop: true 
         });
 
@@ -185,11 +185,12 @@ export class Game extends Scene {
                 if (this.activeInteractName === 'readPaper') {
                     this.popupText.setVisible(false); 
                     EventBus.emit('open-paper');
-                } else if (this.activeInteractName === 'openGallery') {
-                    this.popupText.setText("Press E to View Gallery");
                 } else if (this.activeInteractName === 'openDiary') {
                     this.popupText.setVisible(false);
                     EventBus.emit('open-diary');
+                } else if (this.activeInteractName === 'openGallery') {
+                    this.popupText.setVisible(false);
+                    EventBus.emit('open-gallery');
                 }
             }
         } else {
