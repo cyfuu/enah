@@ -10,7 +10,7 @@ export const LetterUI = ({ onClose }: { onClose: () => void }) => {
         }, 150);
 
         const handleKeyUp = (event: KeyboardEvent) => {
-            if (readyToClose.current && event.key.toLowerCase() === 'e') {
+            if (readyToClose.current && event.key === 'Escape') {
                 onClose();
             }
         };
@@ -34,7 +34,7 @@ export const LetterUI = ({ onClose }: { onClose: () => void }) => {
                 </p>
                 
                 <button className="close-btn" onClick={onClose}>
-                    CLOSE [E]
+                    CLOSE [ESC]
                 </button>
             </div>
         </div>

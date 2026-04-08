@@ -98,7 +98,7 @@ export class Game extends Scene {
 
         if (this.input.keyboard) {
             this.cursors = this.input.keyboard.createCursorKeys();
-            this.interactKey = this.input.keyboard.addKey('E');
+            this.interactKey = this.input.keyboard.addKey('E', false);
         }
 
         const objectsTop = map.createLayer('Objects-Top', allTilesets, 0, 0);
@@ -116,8 +116,17 @@ export class Game extends Scene {
 
         this.cameras.main.setZoom(3).startFollow(this.player, true, 0.08, 0.08);
 
-        EventBus.on('interaction-start', () => { this.isInteracting = true; this.player.setVelocity(0); this.player.anims.stop(); });
-        EventBus.on('interaction-end', () => { this.isInteracting = false; });
+        EventBus.on('interaction-start', () => { 
+            this.isInteracting = true; 
+            this.player.setVelocity(0); 
+            this.player.anims.stop(); 
+            if (this.input.keyboard) this.input.keyboard.enabled = false;
+        });
+
+        EventBus.on('interaction-end', () => { 
+            this.isInteracting = false; 
+            if (this.input.keyboard) this.input.keyboard.enabled = true;
+        });
 
         this.sound.add('bg-music', { volume: 0.3, loop: true }).play();
 
@@ -224,10 +233,10 @@ export class Game extends Scene {
         const speed = 80;
         let vx = 0, vy = 0;
         const keys = this.input.keyboard!;
-        if (this.cursors.left.isDown || keys.addKey('A').isDown) vx = -speed;
-        else if (this.cursors.right.isDown || keys.addKey('D').isDown) vx = speed;
-        if (this.cursors.up.isDown || keys.addKey('W').isDown) vy = -speed;
-        else if (this.cursors.down.isDown || keys.addKey('S').isDown) vy = speed;
+        if (this.cursors.left.isDown || keys.addKey('A', false).isDown) vx = -speed;
+        else if (this.cursors.right.isDown || keys.addKey('D', false).isDown) vx = speed;
+        if (this.cursors.up.isDown || keys.addKey('W', false).isDown) vy = -speed;
+        else if (this.cursors.down.isDown || keys.addKey('S', false).isDown) vy = speed;
 
         this.player.setVelocity(vx, vy);
         if (vx !== 0 && vy !== 0) this.player.body?.velocity.normalize().scale(speed);

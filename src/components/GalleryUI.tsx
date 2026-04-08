@@ -22,6 +22,51 @@ const EMOJI_LIST = [
     '🍓', '💌', '🐾', '🍒', '🪴', '🍄', '⭐', '🎵'
 ];
 
+// --- NEW HELPER: Native Image Compressor ---
+const compressImage = (file: File, quality = 0.7, maxWidth = 800): Promise<File> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                // Scale down if it's too wide
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error("Failed to get canvas context"));
+                
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                canvas.toBlob((blob) => {
+                    if (!blob) return reject(new Error("Canvas compression failed"));
+                    
+                    // Force the extension to be .jpg since we are converting to image/jpeg
+                    const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+                    const compressedFile = new File([blob], newFileName, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now(),
+                    });
+                    resolve(compressedFile);
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = (error) => reject(error);
+        };
+        reader.onerror = (error) => reject(error);
+    });
+};
+// ------------------------------------------
+
 const PuffySticker = ({ id, emoji, x, y, rotate, onDelete, onUpdate }: any) => {
     const [isHovered, setIsHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
@@ -142,6 +187,7 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
     const readyToClose = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Initial Fetch & Real-time Subscriptions
     useEffect(() => {
         const fetchData = async () => {
             const [photosRes, stickersRes] = await Promise.all([
@@ -153,6 +199,43 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
             if (stickersRes.data) setStickers(stickersRes.data);
         };
         fetchData();
+
+        // Realtime listener for Photos
+        const photoChannel = supabase.channel('gallery_photos_realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'gallery_photos' }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    setPhotos(prev => {
+                        if (!prev.find(p => p.id === payload.new.id)) {
+                            return [...prev, payload.new as Photo];
+                        }
+                        return prev;
+                    });
+                } else if (payload.eventType === 'DELETE') {
+                    setPhotos(prev => prev.filter(p => p.id !== payload.old.id));
+                }
+            }).subscribe();
+
+        // Realtime listener for Stickers
+        const stickerChannel = supabase.channel('gallery_stickers_realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'gallery_stickers' }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    setStickers(prev => {
+                        if (!prev.find(s => s.id === payload.new.id)) {
+                            return [...prev, payload.new as Sticker];
+                        }
+                        return prev;
+                    });
+                } else if (payload.eventType === 'UPDATE') {
+                    setStickers(prev => prev.map(s => s.id === payload.new.id ? (payload.new as Sticker) : s));
+                } else if (payload.eventType === 'DELETE') {
+                    setStickers(prev => prev.filter(s => s.id !== payload.old.id));
+                }
+            }).subscribe();
+
+        return () => {
+            supabase.removeChannel(photoChannel);
+            supabase.removeChannel(stickerChannel);
+        };
     }, []);
 
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,9 +251,12 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
         setIsUploading(true);
 
         try {
-            const fileExt = pendingFile.name.split('.').pop();
+            // Compress the image before uploading
+            const compressedFile = await compressImage(pendingFile, 0.7, 800);
+
+            const fileExt = compressedFile.name.split('.').pop();
             const fileName = `${Math.random()}.${fileExt}`;
-            const { error: uploadError } = await supabase.storage.from('polaroids').upload(fileName, pendingFile);
+            const { error: uploadError } = await supabase.storage.from('polaroids').upload(fileName, compressedFile);
             if (uploadError) throw uploadError;
 
             const { data: { publicUrl } } = supabase.storage.from('polaroids').getPublicUrl(fileName);
@@ -181,7 +267,12 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
 
             if (dbError) throw dbError;
             if (insertData) {
-                setPhotos([...photos, insertData[0]]);
+                setPhotos(prev => {
+                    if (!prev.find(p => p.id === insertData[0].id)) {
+                        return [...prev, insertData[0]];
+                    }
+                    return prev;
+                });
                 setSpread(Math.floor(photos.length / 4));
             }
         } catch (error) {
@@ -211,7 +302,8 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
             await supabase.from('gallery_photos').delete().eq('id', photoId);
             const fileName = imageUrl.split('/').pop();
             if (fileName) await supabase.storage.from('polaroids').remove([fileName]);
-            setPhotos(photos.filter(p => p.id !== photoId));
+            
+            setPhotos(prev => prev.filter(p => p.id !== photoId));
             if (photos.length - 1 <= spread * 4 && spread > 0) setSpread(spread - 1);
         } catch (error) {
             console.error("Delete failed:", error);
@@ -251,14 +343,14 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
     };
 
     const handleDeleteSticker = async (stickerId: string) => {
-        setStickers(stickers.filter(s => s.id !== stickerId));
+        setStickers(prev => prev.filter(s => s.id !== stickerId));
         await supabase.from('gallery_stickers').delete().eq('id', stickerId);
     };
 
     useEffect(() => {
         const timer = setTimeout(() => readyToClose.current = true, 150);
         const handleKeyUp = (event: KeyboardEvent) => {
-            if (readyToClose.current && event.key.toLowerCase() === 'e' && !pendingFile) {
+            if (readyToClose.current && event.key === 'Escape' && !pendingFile) {
                 if (selectedEmoji) setSelectedEmoji(null);
                 else onClose();
             }
@@ -352,7 +444,7 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
                     borderRadius: '4px' 
                 }}
             >
-                CLOSE [E]
+                CLOSE [ESC]
             </button>
 
             <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileSelect} />
@@ -399,7 +491,7 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
                         </div>
                         {selectedEmoji && (
                             <div style={{ position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', padding: '8px 20px', borderRadius: '20px', fontSize: '14px', zIndex: 100, pointerEvents: 'none', backdropFilter: 'blur(4px)' }}>
-                                Click anywhere to place {selectedEmoji} (Press E to cancel)
+                                Click anywhere to place {selectedEmoji} (Press ESC to cancel)
                             </div>
                         )}
                     </div>

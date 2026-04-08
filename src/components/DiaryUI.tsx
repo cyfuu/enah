@@ -10,6 +10,7 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
     const [leftText, setLeftText] = useState('');
     const [rightText, setRightText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoaded, setIsLoaded] = useState(false); // NEW: Tracks if fetch is complete
 
     const readyToClose = useRef(false);
 
@@ -44,6 +45,7 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
 
     useEffect(() => {
         const fetchPages = async () => {
+            setIsLoaded(false); // Reset loading state when flipping pages
             setLeftText('');
             setRightText('');
             
@@ -59,11 +61,40 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                 if (leftData) setLeftText(leftData.content);
                 if (rightData) setRightText(rightData.content);
             }
+            
+            setIsLoaded(true); // Data is fetched, it's now safe to save edits
         };
         fetchPages();
     }, [leftPageNum, rightPageNum]);
 
     useEffect(() => {
+        const channel = supabase.channel('diary_realtime')
+            .on(
+                'postgres_changes', 
+                { event: '*', schema: 'public', table: 'diary_entries' }, 
+                (payload) => {
+                    const updatedEntry = payload.new as any;
+                    
+                    if (updatedEntry) {
+                        if (updatedEntry.page_number === leftPageNum) {
+                            setLeftText(updatedEntry.content);
+                        } else if (updatedEntry.page_number === rightPageNum) {
+                            setRightText(updatedEntry.content);
+                        }
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [leftPageNum, rightPageNum]);
+
+    useEffect(() => {
+        // Do not trigger saves if the page data hasn't finished loading yet
+        if (!isLoaded) return; 
+
         const saveToDb = async (pageNum: number, content: string) => {
             if (pageNum === 1) return;
             setIsSaving(true);
@@ -75,19 +106,19 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
         };
 
         const timer = setTimeout(() => {
-            if (leftText && leftPageNum !== 1) saveToDb(leftPageNum, leftText);
-            if (rightText) saveToDb(rightPageNum, rightText);
+            // FIXED: Removed the truthy checks so empty strings ("") can successfully save
+            if (leftPageNum !== 1) saveToDb(leftPageNum, leftText);
+            saveToDb(rightPageNum, rightText);
         }, 1000);
+        
         return () => clearTimeout(timer);
-    }, [leftText, rightText, leftPageNum, rightPageNum]);
+    }, [leftText, rightText, leftPageNum, rightPageNum, isLoaded]);
 
     useEffect(() => {
         const timer = setTimeout(() => readyToClose.current = true, 150);
 
         const handleKeyUp = (event: KeyboardEvent) => {
-            if (document.activeElement?.tagName.toLowerCase() === 'textarea') return;
-
-            if (readyToClose.current && event.key.toLowerCase() === 'e') {
+            if (readyToClose.current && event.key === 'Escape') {
                 onClose();
             }
         };
@@ -102,7 +133,6 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
     return (
         <div className="ui-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             
-            {/* VISIBLE CLOSE INDICATOR (since [E] logic is active) */}
             <button 
                 onClick={onClose}
                 style={{
@@ -114,10 +144,9 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.5)'}
             >
-                CLOSE [E]
+                CLOSE [ESC]
             </button>
 
-            {/* HARD BOOK COVER */}
             <div style={{
                 padding: '20px',
                 backgroundColor: '#5d4037',
@@ -129,7 +158,6 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                 <div style={{ position: 'absolute', top: '10px', left: '10px', width: '20px', height: '20px', borderTop: '2px solid #af9b60', borderLeft: '2px solid #af9b60', borderRadius: '5px 0 0 0' }}/>
                 <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '20px', height: '20px', borderBottom: '2px solid #af9b60', borderRight: '2px solid #af9b60', borderRadius: '0 0 5px 0' }}/>
 
-                {/* PARCHMENT PAGES CONTAINER */}
                 <div style={{
                     display: 'flex', width: '850px', height: '550px',
                     backgroundColor: '#f4ebd8',
@@ -138,7 +166,6 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                     boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)'
                 }}>
                     
-                    {/* BOOK SPINE/FOLD */}
                     <div style={{
                         position: 'absolute', left: '50%', top: 0, bottom: 0,
                         width: '30px', transform: 'translateX(-50%)',
@@ -151,7 +178,6 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                         width: '1px', backgroundColor: 'rgba(0,0,0,0.2)', transform: 'translateX(-50%)', zIndex: 11
                     }}/>
 
-                    {/* LEFT PAGE */}
                     <div style={{ flex: 1, padding: '50px 40px 40px 50px', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #d1c4e9', paddingBottom: '5px', marginBottom: '15px' }}>
                             <h2 style={{ fontFamily: '"Georgia", serif', margin: 0, color: '#5e35b1', fontSize: '22px' }}>Our Journal</h2>
@@ -175,7 +201,6 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                         )}
                     </div>
 
-                    {/* RIGHT PAGE */}
                     <div style={{ flex: 1, padding: '50px 50px 40px 40px', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #d1c4e9', paddingBottom: '5px', marginBottom: '15px' }}>
                             <span style={{ fontSize: '12px', color: '#888', fontFamily: 'sans-serif' }}>Pg. {rightPageNum}</span>
@@ -189,7 +214,6 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                     </div>
                 </div>
 
-                {/* NAVIGATION CONTROLS */}
                 <div style={{ position: 'absolute', bottom: '-65px', left: '20px', right: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <button 
                         onClick={() => setSpread(s => Math.max(0, s - 1))} 
