@@ -1,7 +1,27 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
+import { supabase } from '../../supabaseClient';
 
 export class Game extends Scene {
+    private multiplayerChannel: any = null;
+    private lastTrackTime: number = 0;
+    
+    private lastSentX: number = 0;
+    private lastSentY: number = 0;
+    private lastSentAnim: string = '';
+    
+    private player: Phaser.Physics.Arcade.Sprite;
+    private otherPlayer: Phaser.Physics.Arcade.Sprite | null = null;
+    private targetOtherPlayerPos: { x: number, y: number } | null = null;
+    private userRole: 'boy' | 'girl';
+    
+    private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+    private popupText: Phaser.GameObjects.Text;
+    private interactKey: Phaser.Input.Keyboard.Key;
+    private interactGroup: Phaser.Physics.Arcade.StaticGroup;
+    private activeInteractName: string | null = null;
+    private isInteracting: boolean = false;
+
     constructor() {
         super('Game');
     }
@@ -14,21 +34,11 @@ export class Game extends Scene {
         this.load.image('thingsImage', 'assets/map/Basic_Grass_Biome_things.png');
         this.load.image('interiorsImage', 'assets/map/Interiors.png');
 
-        this.load.spritesheet('player', 'assets/character/character.png', {
-            frameWidth: 114,
-            frameHeight: 114
-        });
+        this.load.spritesheet('boy', 'assets/character/boy.png', { frameWidth: 114, frameHeight: 114 });
+        this.load.spritesheet('girl', 'assets/character/girl.png', { frameWidth: 114, frameHeight: 114 });
 
         this.load.audio('bg-music', 'assets/audio/background-music.mp3');
     }
-
-    private player: Phaser.Physics.Arcade.Sprite;
-    private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
-    private popupText: Phaser.GameObjects.Text;
-    private interactKey: Phaser.Input.Keyboard.Key;
-    private interactGroup: Phaser.Physics.Arcade.StaticGroup;
-    private activeInteractName: string | null = null;
-    private isInteracting: boolean = false;
 
     create() {
         const map = this.make.tilemap({ key: 'galleryMap' });
@@ -41,8 +51,8 @@ export class Game extends Scene {
             (tileset): tileset is Phaser.Tilemaps.Tileset => tileset !== null
         );
 
-        const waterLayer = waterTiles ? map.createLayer('Water', [waterTiles], 0, 0) : null;
-        const grassLayer = grassTiles ? map.createLayer('Grass', [grassTiles], 0, 0) : null;
+        map.createLayer('Water', [waterTiles!], 0, 0)?.setDepth(0);
+        map.createLayer('Grass', [grassTiles!], 0, 0)?.setDepth(1);
         const hillsLayer = map.createLayer('Hills', allTilesets, 0, 0); 
         const objectsBase = map.createLayer('Objects-Base', allTilesets, 0, 0);
         const collisionLayer = map.createLayer('Collision', allTilesets, 0, 0);
@@ -55,198 +65,225 @@ export class Game extends Scene {
         const centerX = map.widthInPixels / 2;
         const centerY = map.heightInPixels / 2;
         
-        this.player = this.physics.add.sprite(centerX, centerY, 'player');
-        this.player.setScale(0.2);
-        this.player.setFrame(1); 
+        this.player = this.physics.add.sprite(centerX, centerY, 'boy');
+        this.player.setScale(0.2).setDepth(10).setFrame(1); 
 
         if (this.player.body) {
             this.player.body.setSize(50, 20);
             this.player.body.setOffset(32, 85);
         }
 
-        const hasPlayed = localStorage.getItem('hasPlayed');
-        if (!hasPlayed) {
-            const tutorialText = this.add.text(this.player.x, this.player.y - 25, 
-                "Hey! Check the paper on the floor first... ❤️", {
-                fontSize: '32px',
-                fontFamily: 'Arial',
-                color: '#ffffff',
-                backgroundColor: '#000000aa',
-                padding: { x: 10, y: 5 }
-            }).setOrigin(0.5).setScale(0.15).setDepth(100);
+        EventBus.on('set-user-role', (role: 'boy' | 'girl') => {
+            this.userRole = role;
+            this.player.setTexture(role);
+            this.createPlayerAnims(role);
+            this.setupMultiplayer();
+        });
 
-            this.tweens.add({
-                targets: tutorialText,
-                alpha: 0,
-                duration: 5000,
-                delay: 3000,
-                onComplete: () => {
-                    tutorialText.destroy();
-                    localStorage.setItem('hasPlayed', 'true');
-                }
-            });
-        }
+        EventBus.emit('game-ready');
 
         this.interactGroup = this.physics.add.staticGroup();
         const interactLayer = map.getObjectLayer('Interactables');
-        
-        if (interactLayer && interactLayer.objects) {
+        if (interactLayer?.objects) {
             interactLayer.objects.forEach(obj => {
-                const x = obj.x! + (obj.width! / 2);
-                const y = obj.y! + (obj.height! / 2);
-                const zone = this.add.zone(x, y, obj.width!, obj.height!);
+                const zone = this.add.zone(obj.x! + (obj.width! / 2), obj.y! + (obj.height! / 2), obj.width!, obj.height!);
                 this.physics.add.existing(zone, true);
                 zone.setData('name', obj.name);
                 this.interactGroup.add(zone);
             });
         }
 
-        this.popupText = this.add.text(0, 0, 'Press E to interact', {
-            fontSize: '48px',
-            fontFamily: 'Arial',
-            color: '#ffffff',
-            backgroundColor: '#000000bb',
-            padding: { x: 15, y: 10 }
-        });
-        this.popupText.setOrigin(0.5).setScale(0.15).setDepth(1000).setVisible(false);
+        this.popupText = this.add.text(0, 0, 'Press E', { fontSize: '32px', color: '#fff', backgroundColor: '#000b' })
+            .setOrigin(0.5).setScale(0.15).setDepth(1000).setVisible(false);
 
         if (this.input.keyboard) {
             this.cursors = this.input.keyboard.createCursorKeys();
             this.interactKey = this.input.keyboard.addKey('E');
         }
 
-        this.anims.create({ key: 'walk-down', frames: this.anims.generateFrameNumbers('player', { start: 0, end: 2 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-left', frames: this.anims.generateFrameNumbers('player', { start: 3, end: 5 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-right', frames: this.anims.generateFrameNumbers('player', { start: 6, end: 8 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-up', frames: this.anims.generateFrameNumbers('player', { start: 9, end: 11 }), frameRate: 10, repeat: -1 });
-
-        this.anims.create({ key: 'walk-down-left', frames: this.anims.generateFrameNumbers('player', { start: 12, end: 14 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-down-right', frames: this.anims.generateFrameNumbers('player', { start: 15, end: 17 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-up-left', frames: this.anims.generateFrameNumbers('player', { start: 18, end: 20 }), frameRate: 10, repeat: -1 });
-        this.anims.create({ key: 'walk-up-right', frames: this.anims.generateFrameNumbers('player', { start: 21, end: 23 }), frameRate: 10, repeat: -1 });
-
         const objectsTop = map.createLayer('Objects-Top', allTilesets, 0, 0);
+        objectsTop?.setDepth(20);
 
-        if (waterLayer) waterLayer.setDepth(0);
-        if (grassLayer) grassLayer.setDepth(1);
-        if (hillsLayer) hillsLayer.setDepth(2);
-        if (objectsBase) objectsBase.setDepth(2);
-        this.player.setDepth(10);
-        if (objectsTop) objectsTop.setDepth(20);
-
-        if (hillsLayer) hillsLayer.setCollisionByProperty({ collides: true });
-        if (objectsBase) objectsBase.setCollisionByProperty({ collides: true });
-
+        if (hillsLayer) {
+            hillsLayer.setDepth(2).setCollisionByProperty({ collides: true });
+            this.physics.add.collider(this.player, hillsLayer);
+        }
+        if (objectsBase) {
+            objectsBase.setDepth(2).setCollisionByProperty({ collides: true });
+            this.physics.add.collider(this.player, objectsBase);
+        }
         if (collisionLayer) this.physics.add.collider(this.player, collisionLayer);
-        if (hillsLayer) this.physics.add.collider(this.player, hillsLayer);
-        if (objectsBase) this.physics.add.collider(this.player, objectsBase);
 
-        this.cameras.main.setZoom(3);
-        this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-        this.cameras.main.setBackgroundColor('#9bd4c3');
+        this.cameras.main.setZoom(3).startFollow(this.player, true, 0.08, 0.08);
 
-        EventBus.on('interaction-start', () => {
-            this.isInteracting = true;
-            if (this.player.body) this.player.setVelocity(0);
-            this.player.anims.stop();
+        EventBus.on('interaction-start', () => { this.isInteracting = true; this.player.setVelocity(0); this.player.anims.stop(); });
+        EventBus.on('interaction-end', () => { this.isInteracting = false; });
+
+        this.sound.add('bg-music', { volume: 0.3, loop: true }).play();
+
+        window.addEventListener('beforeunload', this.handleDisconnect);
+        this.events.on('destroy', () => {
+            window.removeEventListener('beforeunload', this.handleDisconnect);
+            this.handleDisconnect();
         });
+    }
 
-        EventBus.on('interaction-end', () => {
-            this.isInteracting = false;
-        });
-
-        const music = this.sound.add('bg-music', { 
-            volume: 0.5, 
-            loop: true 
-        });
-
-        if (this.sound.locked) {
-            this.sound.once('unlocked', () => {
-                music.play();
+    private handleDisconnect = () => {
+        if (this.multiplayerChannel && this.userRole) {
+            this.multiplayerChannel.send({
+                type: 'broadcast',
+                event: 'leave',
+                payload: { role: this.userRole }
             });
-        } else {
-            music.play();
         }
     }
 
-    update() {
-        if (!this.cursors || !this.player || this.isInteracting) return;
+    private createPlayerAnims(key: string) {
+        const directions = ['down', 'left', 'right', 'up', 'down-left', 'down-right', 'up-left', 'up-right'];
+        directions.forEach((dir, index) => {
+            this.anims.create({
+                key: `walk-${dir}`,
+                frames: this.anims.generateFrameNumbers(key, { start: index * 3, end: index * 3 + 2 }),
+                frameRate: 10,
+                repeat: -1
+            });
+        });
+    }
 
-        this.activeInteractName = null;
-        this.physics.overlap(this.player, this.interactGroup, (_player, zone) => {
-            const z = zone as Phaser.GameObjects.Zone;
-            this.activeInteractName = z.getData('name');
-            this.popupText.setPosition(this.player.x, this.player.y - 25);
+    private setupMultiplayer() {
+        if (this.multiplayerChannel) return;
+
+        this.multiplayerChannel = supabase.channel('public:island_room', {
+            config: {
+                broadcast: { self: true, ack: false }
+            }
         });
 
-        if (this.activeInteractName) {
-            this.popupText.setVisible(true);
-            if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-                if (this.activeInteractName === 'readPaper') {
-                    this.popupText.setVisible(false); 
-                    EventBus.emit('open-paper');
-                } else if (this.activeInteractName === 'openDiary') {
-                    this.popupText.setVisible(false);
-                    EventBus.emit('open-diary');
-                } else if (this.activeInteractName === 'openGallery') {
-                    this.popupText.setVisible(false);
-                    EventBus.emit('open-gallery');
+        this.multiplayerChannel
+            .on('broadcast', { event: 'move' }, (payload: any) => {
+                const data = payload.payload;
+                
+                if (data.role !== this.userRole) {
+                    if (!this.otherPlayer) {
+                        const otherRole = this.userRole === 'boy' ? 'girl' : 'boy';
+                        this.otherPlayer = this.physics.add.sprite(data.x, data.y, otherRole).setScale(0.2).setDepth(9);
+                        this.targetOtherPlayerPos = { x: data.x, y: data.y };
+                    }
+                    
+                    this.targetOtherPlayerPos = { x: data.x, y: data.y };
+                    
+                    if (data.isMoving && data.anim) {
+                        this.otherPlayer.play(data.anim, true);
+                    } else {
+                        this.otherPlayer.anims.stop();
+                        if (data.frame !== undefined) {
+                            this.otherPlayer.setFrame(data.frame);
+                        }
+                    }
                 }
-            }
-        } else {
-            this.popupText.setVisible(false);
-            this.popupText.setText("Press E to interact");
+            })
+            .on('broadcast', { event: 'join' }, (payload: any) => {
+                if (payload.payload.role !== this.userRole) {
+                    this.lastSentX = -999; 
+                }
+            })
+            .on('broadcast', { event: 'leave' }, (payload: any) => {
+                if (payload.payload.role !== this.userRole && this.otherPlayer) {
+                    this.otherPlayer.destroy();
+                    this.otherPlayer = null;
+                    this.targetOtherPlayerPos = null;
+                }
+            })
+            .subscribe((status: string) => {
+                if (status === 'SUBSCRIBED') {
+                    this.multiplayerChannel.send({
+                        type: 'broadcast',
+                        event: 'join',
+                        payload: { role: this.userRole }
+                    });
+                }
+            });
+    }
+
+    update() {
+        if (!this.cursors || !this.player || this.isInteracting || !this.userRole) return;
+
+        this.activeInteractName = null;
+        this.physics.overlap(this.player, this.interactGroup, (_, zone) => {
+            this.activeInteractName = (zone as Phaser.GameObjects.Zone).getData('name');
+            this.popupText.setPosition(this.player.x, this.player.y - 25).setVisible(true);
+        });
+
+        if (!this.activeInteractName) this.popupText.setVisible(false);
+
+        if (this.activeInteractName && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+            const eventMap: any = { 'readPaper': 'open-paper', 'openDiary': 'open-diary', 'openGallery': 'open-gallery' };
+            if (eventMap[this.activeInteractName]) EventBus.emit(eventMap[this.activeInteractName]);
         }
 
         const speed = 80;
-        let vx = 0;
-        let vy = 0;
-
-        const leftDown = this.cursors.left?.isDown || this.input.keyboard?.addKey('A').isDown;
-        const rightDown = this.cursors.right?.isDown || this.input.keyboard?.addKey('D').isDown;
-        const upDown = this.cursors.up?.isDown || this.input.keyboard?.addKey('W').isDown;
-        const downDown = this.cursors.down?.isDown || this.input.keyboard?.addKey('S').isDown;
-
-        if (leftDown) vx = -speed;
-        else if (rightDown) vx = speed;
-
-        if (upDown) vy = -speed;
-        else if (downDown) vy = speed;
+        let vx = 0, vy = 0;
+        const keys = this.input.keyboard!;
+        if (this.cursors.left.isDown || keys.addKey('A').isDown) vx = -speed;
+        else if (this.cursors.right.isDown || keys.addKey('D').isDown) vx = speed;
+        if (this.cursors.up.isDown || keys.addKey('W').isDown) vy = -speed;
+        else if (this.cursors.down.isDown || keys.addKey('S').isDown) vy = speed;
 
         this.player.setVelocity(vx, vy);
-
-        if (vx !== 0 && vy !== 0) {
-            this.player.body?.velocity.normalize().scale(speed);
-        }
-
-        let animKey = '';
+        if (vx !== 0 && vy !== 0) this.player.body?.velocity.normalize().scale(speed);
 
         if (vx === 0 && vy === 0) {
             const current = this.player.anims.currentAnim?.key;
             this.player.anims.stop();
-            if (current === 'walk-down') this.player.setFrame(1);
-            else if (current === 'walk-left') this.player.setFrame(4);
-            else if (current === 'walk-right') this.player.setFrame(7);
-            else if (current === 'walk-up') this.player.setFrame(10);
-            else if (current === 'walk-down-left') this.player.setFrame(13);
-            else if (current === 'walk-down-right') this.player.setFrame(16);
-            else if (current === 'walk-up-left') this.player.setFrame(19);
-            else if (current === 'walk-up-right') this.player.setFrame(22);
+            const frames: any = { 'walk-down': 1, 'walk-left': 4, 'walk-right': 7, 'walk-up': 10 };
+            if (current && frames[current]) this.player.setFrame(frames[current]);
         } else {
-            if (vy > 0) {
-                if (vx < 0) animKey = 'walk-down-left';
-                else if (vx > 0) animKey = 'walk-down-right';
-                else animKey = 'walk-down';
-            } else if (vy < 0) {
-                if (vx < 0) animKey = 'walk-up-left';
-                else if (vx > 0) animKey = 'walk-up-right';
-                else animKey = 'walk-up';
-            } else {
-                if (vx < 0) animKey = 'walk-left';
-                else if (vx > 0) animKey = 'walk-right';
-            }
+            let animKey = 'walk-down';
+            if (vy > 0) animKey = vx < 0 ? 'walk-down-left' : vx > 0 ? 'walk-down-right' : 'walk-down';
+            else if (vy < 0) animKey = vx < 0 ? 'walk-up-left' : vx > 0 ? 'walk-up-right' : 'walk-up';
+            else animKey = vx < 0 ? 'walk-left' : 'walk-right';
+            this.player.anims.play(animKey, true);
+        }
 
-            if (animKey) this.player.anims.play(animKey, true);
+        if (this.otherPlayer && this.targetOtherPlayerPos) {
+            this.otherPlayer.x = Phaser.Math.Linear(this.otherPlayer.x, this.targetOtherPlayerPos.x, 0.15);
+            this.otherPlayer.y = Phaser.Math.Linear(this.otherPlayer.y, this.targetOtherPlayerPos.y, 0.15);
+        }
+
+        if (this.multiplayerChannel) {
+            const now = Date.now();
+            if (now - this.lastTrackTime > 80) { 
+                
+                const isMoving = vx !== 0 || vy !== 0;
+                const currentAnimKey = isMoving ? (this.player.anims.currentAnim?.key || '') : '';
+                const currentX = Math.round(this.player.x);
+                const currentY = Math.round(this.player.y);
+                const currentFrame = this.player.frame.name;
+
+                if (this.lastSentX !== currentX || 
+                    this.lastSentY !== currentY || 
+                    this.lastSentAnim !== currentAnimKey) {
+
+                    this.multiplayerChannel.send({
+                        type: 'broadcast',
+                        event: 'move',
+                        payload: { 
+                            role: this.userRole,
+                            x: currentX, 
+                            y: currentY, 
+                            anim: currentAnimKey,
+                            isMoving: isMoving,
+                            frame: currentFrame
+                        }
+                    });
+
+                    this.lastSentX = currentX;
+                    this.lastSentY = currentY;
+                    this.lastSentAnim = currentAnimKey;
+                }
+                
+                this.lastTrackTime = now;
+            }
         }
     }
 }

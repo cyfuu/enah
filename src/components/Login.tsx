@@ -1,14 +1,17 @@
 import { useState } from 'react';
 
-export const Login = ({ onAuth }: { onAuth: () => void }) => {
+export const Login = ({ onAuth }: { onAuth: (role: 'boy' | 'girl') => void }) => {
     const [input, setInput] = useState('');
     const [error, setError] = useState(false);
 
     const checkPass = () => {
-        const secret = import.meta.env.VITE_APP_PASSCODE;
+        const hisPass = import.meta.env.VITE_HIS_PASSCODE;
+        const herPass = import.meta.env.VITE_HER_PASSCODE;
         
-        if (input === secret) {
-            onAuth();
+        if (input === hisPass) {
+            onAuth('boy');
+        } else if (input === herPass) {
+            onAuth('girl');
         } else {
             setError(true);
             setTimeout(() => setError(false), 1500);

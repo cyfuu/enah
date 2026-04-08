@@ -8,14 +8,23 @@ import { Login } from './components/Login';
 
 function App() {
     const phaserRef = useRef<IRefPhaserGame | null>(null);
+    const [userRole, setUserRole] = useState<'boy' | 'girl' | null>(null);
+    const [isAuthed, setIsAuthed] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
     const [showLetter, setShowLetter] = useState(false);
     const [showDiary, setShowDiary] = useState(false);
     const [showGallery, setShowGallery] = useState(false);
-    const [isAuthed, setIsAuthed] = useState(false);
-    const [isMuted, setIsMuted] = useState(false);
 
     useEffect(() => {
-        if (!isAuthed) return;
+        if (!isAuthed || !userRole) return;
+
+        const handleGameReady = () => {
+            if (userRole) {
+                EventBus.emit('set-user-role', userRole);
+            }
+        };
+
+        EventBus.on('game-ready', handleGameReady);
 
         EventBus.on('open-paper', () => {
             setShowLetter(true);
@@ -35,8 +44,9 @@ function App() {
             EventBus.removeListener('open-paper');
             EventBus.removeListener('open-diary');
             EventBus.removeListener('open-gallery');
+            EventBus.removeListener('game-ready', handleGameReady);
         };
-    }, [isAuthed]);
+    }, [isAuthed, userRole]);
 
     const handleCloseLetter = () => {
         setShowLetter(false);
@@ -62,7 +72,10 @@ function App() {
     };
 
     if (!isAuthed) {
-        return <Login onAuth={() => setIsAuthed(true)} />;
+        return <Login onAuth={(role) => {
+            setUserRole(role);
+            setIsAuthed(true);
+        }} />;
     }
 
     return (
