@@ -77,6 +77,7 @@ export class Game extends Scene {
             this.userRole = role;
             this.player.setTexture(role);
             this.createPlayerAnims(role);
+            this.player.setFrame(1);
             this.setupMultiplayer();
         });
 
@@ -120,7 +121,10 @@ export class Game extends Scene {
             this.isInteracting = true; 
             this.player.setVelocity(0); 
             this.player.anims.stop(); 
-            if (this.input.keyboard) this.input.keyboard.enabled = false;
+            if (this.input.keyboard) {
+                this.input.keyboard.resetKeys();
+                this.input.keyboard.enabled = false;
+            }
         });
 
         EventBus.on('interaction-end', () => { 
@@ -244,8 +248,21 @@ export class Game extends Scene {
         if (vx === 0 && vy === 0) {
             const current = this.player.anims.currentAnim?.key;
             this.player.anims.stop();
-            const frames: any = { 'walk-down': 1, 'walk-left': 4, 'walk-right': 7, 'walk-up': 10 };
-            if (current && frames[current]) this.player.setFrame(frames[current]);
+            const frames: any = { 
+                'walk-down': 1, 
+                'walk-left': 4, 
+                'walk-right': 7, 
+                'walk-up': 10,
+                'walk-down-left': 13,
+                'walk-down-right': 16,
+                'walk-up-left': 19,
+                'walk-up-right': 22
+            };
+            if (current && frames[current] !== undefined) {
+                this.player.setFrame(frames[current]);
+            } else if (!current) {
+                this.player.setFrame(1);
+            }
         } else {
             let animKey = 'walk-down';
             if (vy > 0) animKey = vx < 0 ? 'walk-down-left' : vx > 0 ? 'walk-down-right' : 'walk-down';
@@ -258,6 +275,20 @@ export class Game extends Scene {
             this.otherPlayer.x = Phaser.Math.Linear(this.otherPlayer.x, this.targetOtherPlayerPos.x, 0.15);
             this.otherPlayer.y = Phaser.Math.Linear(this.otherPlayer.y, this.targetOtherPlayerPos.y, 0.15);
         }
+
+        // --- NEW: Y-SORTING LOGIC ---
+        // Keeps both players underneath your Objects-Top (depth: 20) layer, 
+        // while safely swapping who overlaps who based on their Y position.
+        if (this.otherPlayer) {
+            if (this.player.y > this.otherPlayer.y) {
+                this.player.setDepth(10);
+                this.otherPlayer.setDepth(9);
+            } else {
+                this.player.setDepth(9);
+                this.otherPlayer.setDepth(10);
+            }
+        }
+        // ----------------------------
 
         if (this.multiplayerChannel) {
             const now = Date.now();
