@@ -76,7 +76,7 @@ export class Game extends Scene {
         EventBus.on('set-user-role', (role: 'boy' | 'girl') => {
             this.userRole = role;
             this.player.setTexture(role);
-            this.createPlayerAnims(role);
+            this.createPlayerAnims();
             this.player.setFrame(1);
             this.setupMultiplayer();
 
@@ -167,15 +167,21 @@ export class Game extends Scene {
         }
     }
 
-    private createPlayerAnims(key: string) {
+    private createPlayerAnims() {
+        const roles = ['boy', 'girl'];
         const directions = ['down', 'left', 'right', 'up', 'down-left', 'down-right', 'up-left', 'up-right'];
-        directions.forEach((dir, index) => {
-            this.anims.create({
-                key: `walk-${dir}`,
-                frames: this.anims.generateFrameNumbers(key, { start: index * 3, end: index * 3 + 2 }),
-                frameRate: 10,
-                repeat: -1
-            });
+        
+        roles.forEach(role => {
+            if (!this.anims.exists(`${role}-walk-down`)) { 
+                directions.forEach((dir, index) => {
+                    this.anims.create({
+                        key: `${role}-walk-${dir}`, 
+                        frames: this.anims.generateFrameNumbers(role, { start: index * 3, end: index * 3 + 2 }),
+                        frameRate: 10,
+                        repeat: -1
+                    });
+                });
+            }
         });
     }
 
@@ -262,7 +268,7 @@ export class Game extends Scene {
         if (vx !== 0 && vy !== 0) this.player.body?.velocity.normalize().scale(speed);
 
         if (vx === 0 && vy === 0) {
-            const current = this.player.anims.currentAnim?.key;
+            const current = this.player.anims.currentAnim?.key; 
             this.player.anims.stop();
             const frames: any = { 
                 'walk-down': 1, 
@@ -274,17 +280,21 @@ export class Game extends Scene {
                 'walk-up-left': 19,
                 'walk-up-right': 22
             };
-            if (current && frames[current] !== undefined) {
-                this.player.setFrame(frames[current]);
+            
+            const dirOnly = current ? current.replace(`${this.userRole}-`, '') : '';
+
+            if (current && frames[dirOnly] !== undefined) {
+                this.player.setFrame(frames[dirOnly]);
             } else if (!current) {
                 this.player.setFrame(1);
             }
         } else {
-            let animKey = 'walk-down';
-            if (vy > 0) animKey = vx < 0 ? 'walk-down-left' : vx > 0 ? 'walk-down-right' : 'walk-down';
-            else if (vy < 0) animKey = vx < 0 ? 'walk-up-left' : vx > 0 ? 'walk-up-right' : 'walk-up';
-            else animKey = vx < 0 ? 'walk-left' : 'walk-right';
-            this.player.anims.play(animKey, true);
+            let dirKey = 'walk-down';
+            if (vy > 0) dirKey = vx < 0 ? 'walk-down-left' : vx > 0 ? 'walk-down-right' : 'walk-down';
+            else if (vy < 0) dirKey = vx < 0 ? 'walk-up-left' : vx > 0 ? 'walk-up-right' : 'walk-up';
+            else dirKey = vx < 0 ? 'walk-left' : 'walk-right';
+            
+            this.player.anims.play(`${this.userRole}-${dirKey}`, true);
         }
 
         if (this.otherPlayer && this.targetOtherPlayerPos) {
@@ -292,9 +302,6 @@ export class Game extends Scene {
             this.otherPlayer.y = Phaser.Math.Linear(this.otherPlayer.y, this.targetOtherPlayerPos.y, 0.15);
         }
 
-        // --- NEW: Y-SORTING LOGIC ---
-        // Keeps both players underneath your Objects-Top (depth: 20) layer, 
-        // while safely swapping who overlaps who based on their Y position.
         if (this.otherPlayer) {
             if (this.player.y > this.otherPlayer.y) {
                 this.player.setDepth(10);
@@ -304,7 +311,6 @@ export class Game extends Scene {
                 this.otherPlayer.setDepth(10);
             }
         }
-        // ----------------------------
 
         if (this.multiplayerChannel) {
             const now = Date.now();
