@@ -10,7 +10,7 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
     const [leftText, setLeftText] = useState('');
     const [rightText, setRightText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
-    const [isLoaded, setIsLoaded] = useState(false); // NEW: Tracks if fetch is complete
+    const [isLoaded, setIsLoaded] = useState(false);
 
     const readyToClose = useRef(false);
 
@@ -45,7 +45,7 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
 
     useEffect(() => {
         const fetchPages = async () => {
-            setIsLoaded(false); // Reset loading state when flipping pages
+            setIsLoaded(false);
             setLeftText('');
             setRightText('');
             
@@ -62,7 +62,7 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                 if (rightData) setRightText(rightData.content);
             }
             
-            setIsLoaded(true); // Data is fetched, it's now safe to save edits
+            setIsLoaded(true);
         };
         fetchPages();
     }, [leftPageNum, rightPageNum]);
@@ -92,7 +92,6 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
     }, [leftPageNum, rightPageNum]);
 
     useEffect(() => {
-        // Do not trigger saves if the page data hasn't finished loading yet
         if (!isLoaded) return; 
 
         const saveToDb = async (pageNum: number, content: string) => {
@@ -106,7 +105,6 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
         };
 
         const timer = setTimeout(() => {
-            // FIXED: Removed the truthy checks so empty strings ("") can successfully save
             if (leftPageNum !== 1) saveToDb(leftPageNum, leftText);
             saveToDb(rightPageNum, rightText);
         }, 1000);

@@ -22,7 +22,6 @@ const EMOJI_LIST = [
     '🍓', '💌', '🐾', '🍒', '🪴', '🍄', '⭐', '🎵'
 ];
 
-// --- NEW HELPER: Native Image Compressor ---
 const compressImage = (file: File, quality = 0.7, maxWidth = 800): Promise<File> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -35,7 +34,6 @@ const compressImage = (file: File, quality = 0.7, maxWidth = 800): Promise<File>
                 let width = img.width;
                 let height = img.height;
 
-                // Scale down if it's too wide
                 if (width > maxWidth) {
                     height = Math.round((height * maxWidth) / width);
                     width = maxWidth;
@@ -51,7 +49,6 @@ const compressImage = (file: File, quality = 0.7, maxWidth = 800): Promise<File>
                 canvas.toBlob((blob) => {
                     if (!blob) return reject(new Error("Canvas compression failed"));
                     
-                    // Force the extension to be .jpg since we are converting to image/jpeg
                     const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
                     const compressedFile = new File([blob], newFileName, {
                         type: 'image/jpeg',
@@ -65,7 +62,6 @@ const compressImage = (file: File, quality = 0.7, maxWidth = 800): Promise<File>
         reader.onerror = (error) => reject(error);
     });
 };
-// ------------------------------------------
 
 const PuffySticker = ({ id, emoji, x, y, rotate, onDelete, onUpdate }: any) => {
     const [isHovered, setIsHovered] = useState(false);
@@ -187,7 +183,6 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
     const readyToClose = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Initial Fetch & Real-time Subscriptions
     useEffect(() => {
         const fetchData = async () => {
             const [photosRes, stickersRes] = await Promise.all([
@@ -200,7 +195,6 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
         };
         fetchData();
 
-        // Realtime listener for Photos
         const photoChannel = supabase.channel('gallery_photos_realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'gallery_photos' }, (payload) => {
                 if (payload.eventType === 'INSERT') {
@@ -215,7 +209,6 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
                 }
             }).subscribe();
 
-        // Realtime listener for Stickers
         const stickerChannel = supabase.channel('gallery_stickers_realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'gallery_stickers' }, (payload) => {
                 if (payload.eventType === 'INSERT') {
@@ -251,7 +244,6 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
         setIsUploading(true);
 
         try {
-            // Compress the image before uploading
             const compressedFile = await compressImage(pendingFile, 0.7, 800);
 
             const fileExt = compressedFile.name.split('.').pop();

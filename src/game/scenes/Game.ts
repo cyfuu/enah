@@ -79,6 +79,22 @@ export class Game extends Scene {
             this.createPlayerAnims(role);
             this.player.setFrame(1);
             this.setupMultiplayer();
+
+            const welcomeMsg = this.add.text(this.player.x, this.player.y - 30, 'Check the paper!', { 
+                fontSize: '32px', 
+                color: '#fff', 
+                backgroundColor: '#000b',
+                padding: { x: 8, y: 4 }
+            }).setOrigin(0.5).setScale(0.15).setDepth(1000);
+
+            this.tweens.add({
+                targets: welcomeMsg,
+                y: welcomeMsg.y - 20,
+                alpha: 0,
+                duration: 2000,
+                delay: 2000,
+                onComplete: () => welcomeMsg.destroy() 
+            });
         });
 
         EventBus.emit('game-ready');
