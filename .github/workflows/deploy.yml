@@ -37,7 +37,8 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          
+          VITE_HIS_PASSCODE: ${{ secrets.VITE_HIS_PASSCODE }}
+          VITE_HER_PASSCODE: ${{ secrets.VITE_HER_PASSCODE }}
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
