@@ -117,6 +117,8 @@ export class Game extends Scene {
         if (this.input.keyboard) {
             this.cursors = this.input.keyboard.createCursorKeys();
             this.interactKey = this.input.keyboard.addKey('E', false);
+
+            this.input.keyboard.removeCapture('SPACE,SHIFT,UP,DOWN,LEFT,RIGHT');
         }
 
         const objectsTop = map.createLayer('Objects-Top', allTilesets, 0, 0);

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
 export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
@@ -13,6 +13,22 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
     const [isLoaded, setIsLoaded] = useState(false);
 
     const readyToClose = useRef(false);
+    
+    const stateRefs = useRef({ leftText, rightText, leftPageNum, rightPageNum });
+    useEffect(() => {
+        stateRefs.current = { leftText, rightText, leftPageNum, rightPageNum };
+    }, [leftText, rightText, leftPageNum, rightPageNum]);
+
+    const handleClose = useCallback(() => {
+        const { leftText: lText, rightText: rText, leftPageNum: lPage, rightPageNum: rPage } = stateRefs.current;
+        
+        if (lPage !== 1) {
+            supabase.from('diary_entries').upsert({ page_number: lPage, content: lText });
+        }
+        supabase.from('diary_entries').upsert({ page_number: rPage, content: rText });
+        
+        onClose();
+    }, [onClose]);
 
     const textareaStyle: React.CSSProperties = {
         flex: 1,
@@ -117,7 +133,7 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
 
         const handleKeyUp = (event: KeyboardEvent) => {
             if (readyToClose.current && event.key === 'Escape') {
-                onClose();
+                handleClose(); // UPDATED: Calls our forced-save method
             }
         };
 
@@ -126,13 +142,18 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
             window.removeEventListener('keyup', handleKeyUp);
             clearTimeout(timer);
         };
-    }, [onClose]);
+    }, [handleClose]);
 
     return (
-        <div className="ui-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div 
+            className="ui-overlay" 
+            onKeyDown={(e) => { if (e.key !== 'Escape') e.stopPropagation() }}
+            onKeyUp={(e) => { if (e.key !== 'Escape') e.stopPropagation() }}
+            style={{ backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+        >
             
             <button 
-                onClick={onClose}
+                onClick={handleClose}
                 style={{
                     position: 'absolute', top: '20px', right: '20px',
                     padding: '10px 15px', backgroundColor: 'rgba(0,0,0,0.5)',
