@@ -27,6 +27,7 @@ export class Game extends Scene {
     }
 
     preload() {
+        this.load.setBaseURL('/enah/');
         this.load.tilemapTiledJSON('galleryMap', 'assets/map/gallery-map.json');
         this.load.image('floorImage', 'assets/map/floor.png');
         this.load.image('hillsImage', 'assets/map/hills.png');
