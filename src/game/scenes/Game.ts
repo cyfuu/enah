@@ -2,6 +2,37 @@ import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { supabase } from '../../supabaseClient';
 
+type UserRole = 'boy' | 'girl';
+type Direction = 'down' | 'left' | 'right' | 'up' | 'down-left' | 'down-right' | 'up-left' | 'up-right';
+
+interface MovePayload {
+    role: UserRole;
+    x: number;
+    y: number;
+    anim: string;
+    isMoving: boolean;
+    frame: string | number;
+}
+
+const INTERACTION_EVENT_MAP: Record<string, string> = {
+    readPaper: 'open-paper',
+    openDiary: 'open-diary',
+    openGallery: 'open-gallery'
+};
+
+const IDLE_FRAME_BY_ANIM: Record<string, number> = {
+    'walk-down': 1,
+    'walk-left': 4,
+    'walk-right': 7,
+    'walk-up': 10,
+    'walk-down-left': 13,
+    'walk-down-right': 16,
+    'walk-up-left': 19,
+    'walk-up-right': 22
+};
+
+const ANIMATION_DIRECTIONS: Direction[] = ['down', 'left', 'right', 'up', 'down-left', 'down-right', 'up-left', 'up-right'];
+
 export class Game extends Scene {
     private multiplayerChannel: any = null;
     private lastTrackTime: number = 0;
@@ -13,11 +44,17 @@ export class Game extends Scene {
     private player: Phaser.Physics.Arcade.Sprite;
     private otherPlayer: Phaser.Physics.Arcade.Sprite | null = null;
     private targetOtherPlayerPos: { x: number, y: number } | null = null;
-    private userRole: 'boy' | 'girl';
+    private userRole: UserRole;
     
     private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
     private popupText: Phaser.GameObjects.Text;
     private interactKey: Phaser.Input.Keyboard.Key;
+    private movementKeys: {
+        up: Phaser.Input.Keyboard.Key;
+        down: Phaser.Input.Keyboard.Key;
+        left: Phaser.Input.Keyboard.Key;
+        right: Phaser.Input.Keyboard.Key;
+    } | null = null;
     private interactGroup: Phaser.Physics.Arcade.StaticGroup;
     private activeInteractName: string | null = null;
     private isInteracting: boolean = false;
@@ -47,7 +84,7 @@ export class Game extends Scene {
 
         this.load.on('progress', (value: number) => {
             progressBar.clear();
-            progressBar.fillStyle(0xaf9b60, 1);
+            progressBar.fillStyle(0xffffff, 1);
             progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300 * value, 30);
         });
 
@@ -103,7 +140,7 @@ export class Game extends Scene {
             this.player.body.setOffset(32, 85);
         }
 
-        EventBus.on('set-user-role', (role: 'boy' | 'girl') => {
+        EventBus.on('set-user-role', (role: UserRole) => {
             this.userRole = role;
             this.player.setTexture(role);
             this.createPlayerAnims();
@@ -143,12 +180,7 @@ export class Game extends Scene {
         this.popupText = this.add.text(0, 0, 'Press E', { fontSize: '32px', color: '#fff', backgroundColor: '#000b' })
             .setOrigin(0.5).setScale(0.15).setDepth(1000).setVisible(false);
 
-        if (this.input.keyboard) {
-            this.cursors = this.input.keyboard.createCursorKeys();
-            this.interactKey = this.input.keyboard.addKey('E', false);
-
-            this.input.keyboard.removeCapture('SPACE,SHIFT,UP,DOWN,LEFT,RIGHT');
-        }
+        this.initializeInput();
 
         const objectsTop = map.createLayer('Objects-Top', allTilesets, 0, 0);
         objectsTop?.setDepth(20);
@@ -200,12 +232,11 @@ export class Game extends Scene {
     }
 
     private createPlayerAnims() {
-        const roles = ['boy', 'girl'];
-        const directions = ['down', 'left', 'right', 'up', 'down-left', 'down-right', 'up-left', 'up-right'];
+        const roles: UserRole[] = ['boy', 'girl'];
         
         roles.forEach(role => {
             if (!this.anims.exists(`${role}-walk-down`)) { 
-                directions.forEach((dir, index) => {
+                ANIMATION_DIRECTIONS.forEach((dir, index) => {
                     this.anims.create({
                         key: `${role}-walk-${dir}`, 
                         frames: this.anims.generateFrameNumbers(role, { start: index * 3, end: index * 3 + 2 }),
@@ -215,6 +246,21 @@ export class Game extends Scene {
                 });
             }
         });
+    }
+
+    private initializeInput() {
+        if (!this.input.keyboard) return;
+
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.interactKey = this.input.keyboard.addKey('E', false);
+        this.movementKeys = {
+            up: this.input.keyboard.addKey('W', false),
+            down: this.input.keyboard.addKey('S', false),
+            left: this.input.keyboard.addKey('A', false),
+            right: this.input.keyboard.addKey('D', false)
+        };
+
+        this.input.keyboard.removeCapture('SPACE,SHIFT,UP,DOWN,LEFT,RIGHT');
     }
 
     private setupMultiplayer() {
@@ -284,17 +330,12 @@ export class Game extends Scene {
         if (!this.activeInteractName) this.popupText.setVisible(false);
 
         if (this.activeInteractName && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
-            const eventMap: any = { 'readPaper': 'open-paper', 'openDiary': 'open-diary', 'openGallery': 'open-gallery' };
-            if (eventMap[this.activeInteractName]) EventBus.emit(eventMap[this.activeInteractName]);
+            const eventName = INTERACTION_EVENT_MAP[this.activeInteractName];
+            if (eventName) EventBus.emit(eventName);
         }
 
         const speed = 80;
-        let vx = 0, vy = 0;
-        const keys = this.input.keyboard!;
-        if (this.cursors.left.isDown || keys.addKey('A', false).isDown) vx = -speed;
-        else if (this.cursors.right.isDown || keys.addKey('D', false).isDown) vx = speed;
-        if (this.cursors.up.isDown || keys.addKey('W', false).isDown) vy = -speed;
-        else if (this.cursors.down.isDown || keys.addKey('S', false).isDown) vy = speed;
+        const { vx, vy } = this.getMovement(speed);
 
         this.player.setVelocity(vx, vy);
         if (vx !== 0 && vy !== 0) this.player.body?.velocity.normalize().scale(speed);
@@ -302,21 +343,11 @@ export class Game extends Scene {
         if (vx === 0 && vy === 0) {
             const current = this.player.anims.currentAnim?.key; 
             this.player.anims.stop();
-            const frames: any = { 
-                'walk-down': 1, 
-                'walk-left': 4, 
-                'walk-right': 7, 
-                'walk-up': 10,
-                'walk-down-left': 13,
-                'walk-down-right': 16,
-                'walk-up-left': 19,
-                'walk-up-right': 22
-            };
             
             const dirOnly = current ? current.replace(`${this.userRole}-`, '') : '';
 
-            if (current && frames[dirOnly] !== undefined) {
-                this.player.setFrame(frames[dirOnly]);
+            if (current && IDLE_FRAME_BY_ANIM[dirOnly] !== undefined) {
+                this.player.setFrame(IDLE_FRAME_BY_ANIM[dirOnly]);
             } else if (!current) {
                 this.player.setFrame(1);
             }
@@ -358,18 +389,15 @@ export class Game extends Scene {
                     this.lastSentY !== currentY || 
                     this.lastSentAnim !== currentAnimKey) {
 
-                    this.multiplayerChannel.send({
-                        type: 'broadcast',
-                        event: 'move',
-                        payload: { 
-                            role: this.userRole,
-                            x: currentX, 
-                            y: currentY, 
-                            anim: currentAnimKey,
-                            isMoving: isMoving,
-                            frame: currentFrame
-                        }
-                    });
+                    const payload: MovePayload = {
+                        role: this.userRole,
+                        x: currentX,
+                        y: currentY,
+                        anim: currentAnimKey,
+                        isMoving,
+                        frame: currentFrame
+                    };
+                    this.sendMovementPayload(payload);
 
                     this.lastSentX = currentX;
                     this.lastSentY = currentY;
@@ -379,5 +407,28 @@ export class Game extends Scene {
                 this.lastTrackTime = now;
             }
         }
+    }
+
+    private getMovement(speed: number) {
+        let vx = 0;
+        let vy = 0;
+
+        if (this.cursors.left.isDown || this.movementKeys?.left.isDown) vx = -speed;
+        else if (this.cursors.right.isDown || this.movementKeys?.right.isDown) vx = speed;
+
+        if (this.cursors.up.isDown || this.movementKeys?.up.isDown) vy = -speed;
+        else if (this.cursors.down.isDown || this.movementKeys?.down.isDown) vy = speed;
+
+        return { vx, vy };
+    }
+
+    private sendMovementPayload(payload: MovePayload) {
+        if (!this.multiplayerChannel) return;
+
+        this.multiplayerChannel.send({
+            type: 'broadcast',
+            event: 'move',
+            payload
+        });
     }
 }

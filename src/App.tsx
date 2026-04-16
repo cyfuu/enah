@@ -24,26 +24,29 @@ function App() {
             }
         };
 
-        EventBus.on('game-ready', handleGameReady);
-
-        EventBus.on('open-paper', () => {
+        const handleOpenPaper = () => {
             setShowLetter(true);
             EventBus.emit('interaction-start');
-        });
+        };
 
-        EventBus.on('open-diary', () => {
+        const handleOpenDiary = () => {
             setShowDiary(true);
             EventBus.emit('interaction-start');
-        });
+        };
 
-        EventBus.on('open-gallery', () => {
+        const handleOpenGallery = () => {
             setShowGallery(true);
             EventBus.emit('interaction-start');
-        });
+        };
+
+        EventBus.on('game-ready', handleGameReady);
+        EventBus.on('open-paper', handleOpenPaper);
+        EventBus.on('open-diary', handleOpenDiary);
+        EventBus.on('open-gallery', handleOpenGallery);
         return () => {
-            EventBus.removeListener('open-paper');
-            EventBus.removeListener('open-diary');
-            EventBus.removeListener('open-gallery');
+            EventBus.removeListener('open-paper', handleOpenPaper);
+            EventBus.removeListener('open-diary', handleOpenDiary);
+            EventBus.removeListener('open-gallery', handleOpenGallery);
             EventBus.removeListener('game-ready', handleGameReady);
         };
     }, [isAuthed, userRole]);
