@@ -1,10 +1,10 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { supabase } from '../../supabaseClient';
-import { INTERACTION_EVENT_MAP, NETWORK_TRACK_INTERVAL_MS, PLAYER_SPEED } from './game/constants';
-import { createPlayerAnims, getIdleFrame, getMovementDirectionKey, interpolateOtherPlayer, syncPlayerDepthByY } from './game/animation';
-import { getMovement, initializeInput } from './game/input';
-import { MovePayload, MovementKeys, UserRole } from './game/types';
+import { INTERACTION_EVENT_MAP, NETWORK_TRACK_INTERVAL_MS, PLAYER_SPEED } from './shared/constants';
+import { createPlayerAnims, getIdleFrame, getMovementDirectionKey, interpolateOtherPlayer, syncPlayerDepthByY } from './shared/animation';
+import { getMovement, initializeInput } from './shared/input';
+import { MovePayload, MovementKeys, UserRole } from './shared/types';
 
 export class Game extends Scene {
     private multiplayerChannel: any = null;
