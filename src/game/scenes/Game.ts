@@ -4,7 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { INTERACTION_EVENT_MAP, NETWORK_TRACK_INTERVAL_MS, PLAYER_SPEED } from './shared/constants';
 import { createPlayerAnims, getIdleFrame, getMovementDirectionKey, interpolateOtherPlayer, syncPlayerDepthByY } from './shared/animation';
 import { getMovement, initializeInput } from './shared/input';
-import { MovePayload, MovementKeys, UserRole } from './shared/types';
+import { DirectionalInputState, MovePayload, MovementKeys, UserRole } from './shared/types';
 
 export class Game extends Scene {
     private multiplayerChannel: any = null;
@@ -19,20 +19,31 @@ export class Game extends Scene {
     private targetOtherPlayerPos: { x: number; y: number } | null = null;
     private userRole: UserRole;
 
-    private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+    private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
     private popupText: Phaser.GameObjects.Text;
-    private interactKey: Phaser.Input.Keyboard.Key;
+    private interactKey: Phaser.Input.Keyboard.Key | null = null;
     private movementKeys: MovementKeys | null = null;
     private interactGroup: Phaser.Physics.Arcade.StaticGroup;
     private activeInteractName: string | null = null;
     private isInteracting: boolean = false;
+
+    private isMobileInputEnabled: boolean = false;
+    private mobileDirections: DirectionalInputState = {
+        up: false,
+        down: false,
+        left: false,
+        right: false
+    };
+    private mobileInteractPressed: boolean = false;
+    private mobileDpadButtons: Partial<Record<keyof DirectionalInputState, Phaser.GameObjects.Container>> = {};
+    private mobileInteractButton: Phaser.GameObjects.Container | null = null;
 
     constructor() {
         super('Game');
     }
 
     preload() {
-        this.load.setBaseURL('/enah/');
+        this.load.setBaseURL(import.meta.env.BASE_URL);
 
         const width = this.cameras.main.width;
         const height = this.cameras.main.height;
@@ -155,6 +166,12 @@ export class Game extends Scene {
             this.movementKeys = inputSetup.movementKeys;
         }
 
+        this.isMobileInputEnabled = this.shouldEnableMobileControls();
+        if (this.isMobileInputEnabled) {
+            this.setupMobileControls();
+            this.scale.on('resize', this.layoutMobileControls, this);
+        }
+
         const objectsTop = map.createLayer('Objects-Top', allTilesets, 0, 0);
         objectsTop?.setDepth(20);
 
@@ -174,6 +191,11 @@ export class Game extends Scene {
             this.isInteracting = true;
             this.player.setVelocity(0);
             this.player.anims.stop();
+            this.mobileDirections.up = false;
+            this.mobileDirections.down = false;
+            this.mobileDirections.left = false;
+            this.mobileDirections.right = false;
+            this.mobileInteractPressed = false;
             if (this.input.keyboard) {
                 this.input.keyboard.resetKeys();
                 this.input.keyboard.enabled = false;
@@ -189,9 +211,127 @@ export class Game extends Scene {
 
         window.addEventListener('beforeunload', this.handleDisconnect);
         this.events.on('destroy', () => {
+            this.scale.off('resize', this.layoutMobileControls, this);
             window.removeEventListener('beforeunload', this.handleDisconnect);
             this.handleDisconnect();
         });
+    }
+
+    private shouldEnableMobileControls(): boolean {
+        const hasTouch = this.sys.game.device.input.touch;
+        const hasCoarsePointer = typeof window !== 'undefined'
+            && typeof window.matchMedia === 'function'
+            && window.matchMedia('(pointer: coarse)').matches;
+
+        return hasTouch && hasCoarsePointer;
+    }
+
+    private setupMobileControls() {
+        this.mobileDpadButtons.up = this.createDpadButton('▲', 'up', () => {
+            this.mobileDirections.up = true;
+        }, () => {
+            this.mobileDirections.up = false;
+        });
+
+        this.mobileDpadButtons.down = this.createDpadButton('▼', 'down', () => {
+            this.mobileDirections.down = true;
+        }, () => {
+            this.mobileDirections.down = false;
+        });
+
+        this.mobileDpadButtons.left = this.createDpadButton('◀', 'left', () => {
+            this.mobileDirections.left = true;
+        }, () => {
+            this.mobileDirections.left = false;
+        });
+
+        this.mobileDpadButtons.right = this.createDpadButton('▶', 'right', () => {
+            this.mobileDirections.right = true;
+        }, () => {
+            this.mobileDirections.right = false;
+        });
+
+        const interactBg = this.add.circle(0, 0, 42, 0x1f6f4a, 0.75)
+            .setStrokeStyle(3, 0xcdf9e5, 0.95);
+        const interactLabel = this.add.text(0, -2, 'Use', {
+            fontSize: '18px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        this.mobileInteractButton = this.add.container(0, 0, [interactBg, interactLabel])
+            .setDepth(2100)
+            .setScrollFactor(0)
+            .setAlpha(0.55)
+            .setInteractive(new Phaser.Geom.Circle(0, 0, 42), Phaser.Geom.Circle.Contains);
+
+        this.mobileInteractButton
+            .on('pointerdown', () => {
+                this.mobileInteractPressed = true;
+                this.mobileInteractButton?.setAlpha(1);
+            })
+            .on('pointerup', () => this.mobileInteractButton?.setAlpha(0.75))
+            .on('pointerout', () => this.mobileInteractButton?.setAlpha(0.75));
+
+        this.layoutMobileControls();
+    }
+
+    private createDpadButton(
+        symbol: string,
+        direction: keyof DirectionalInputState,
+        onDown: () => void,
+        onUp: () => void
+    ) {
+        const bg = this.add.circle(0, 0, 28, 0x17324d, 0.72).setStrokeStyle(2, 0x8cb8df, 0.92);
+        const label = this.add.text(0, 0, symbol, {
+            fontSize: '20px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        const button = this.add.container(0, 0, [bg, label])
+            .setDepth(2100)
+            .setScrollFactor(0)
+            .setInteractive(new Phaser.Geom.Circle(0, 0, 28), Phaser.Geom.Circle.Contains);
+
+        button
+            .on('pointerdown', () => {
+                onDown();
+                button.setAlpha(1);
+            })
+            .on('pointerup', () => {
+                onUp();
+                button.setAlpha(0.85);
+            })
+            .on('pointerout', () => {
+                onUp();
+                button.setAlpha(0.85);
+            });
+
+        this.input.on('pointerup', (_pointer: Phaser.Input.Pointer) => {
+            this.mobileDirections[direction] = false;
+            button.setAlpha(0.85);
+        });
+
+        button.setAlpha(0.85);
+        return button;
+    }
+
+    private layoutMobileControls() {
+        if (!this.isMobileInputEnabled) return;
+
+        const width = this.scale.width;
+        const height = this.scale.height;
+        const baseX = 84;
+        const baseY = height - 86;
+        const step = 44;
+
+        this.mobileDpadButtons.up?.setPosition(baseX, baseY - step);
+        this.mobileDpadButtons.down?.setPosition(baseX, baseY + step);
+        this.mobileDpadButtons.left?.setPosition(baseX - step, baseY);
+        this.mobileDpadButtons.right?.setPosition(baseX + step, baseY);
+
+        this.mobileInteractButton?.setPosition(width - 84, height - 92);
     }
 
     private handleDisconnect = () => {
@@ -260,22 +400,31 @@ export class Game extends Scene {
     }
 
     update() {
-        if (!this.cursors || !this.player || this.isInteracting || !this.userRole) return;
+        if (!this.player || this.isInteracting || !this.userRole) return;
 
         this.activeInteractName = null;
         this.physics.overlap(this.player, this.interactGroup, (_, zone) => {
             this.activeInteractName = (zone as Phaser.GameObjects.Zone).getData('name');
-            this.popupText.setPosition(this.player.x, this.player.y - 25).setVisible(true);
+            const interactionHint = this.isMobileInputEnabled ? 'Tap Use' : 'Press E';
+            this.popupText.setText(interactionHint).setPosition(this.player.x, this.player.y - 25).setVisible(true);
         });
 
         if (!this.activeInteractName) this.popupText.setVisible(false);
+        if (this.mobileInteractButton) {
+            this.mobileInteractButton.setAlpha(this.activeInteractName ? 0.9 : 0.55);
+        }
 
-        if (this.activeInteractName && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+        const keyboardInteractPressed = this.interactKey ? Phaser.Input.Keyboard.JustDown(this.interactKey) : false;
+        const mobileInteractPressed = this.mobileInteractPressed;
+        this.mobileInteractPressed = false;
+
+        if (this.activeInteractName && (keyboardInteractPressed || mobileInteractPressed)) {
             const eventName = INTERACTION_EVENT_MAP[this.activeInteractName];
             if (eventName) EventBus.emit(eventName);
         }
 
-        const { vx, vy } = getMovement(this.cursors, this.movementKeys, PLAYER_SPEED);
+        const mobileInput = this.isMobileInputEnabled ? this.mobileDirections : null;
+        const { vx, vy } = getMovement(this.cursors, this.movementKeys, PLAYER_SPEED, mobileInput);
 
         this.player.setVelocity(vx, vy);
         if (vx !== 0 && vy !== 0) this.player.body?.velocity.normalize().scale(PLAYER_SPEED);

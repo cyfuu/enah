@@ -1,4 +1,4 @@
-import { MovementKeys, MovementVector } from './types';
+import { DirectionalInputState, MovementKeys, MovementVector } from './types';
 
 interface InputSetup {
     cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -28,18 +28,24 @@ export function initializeInput(keyboard: Phaser.Input.Keyboard.KeyboardPlugin |
 }
 
 export function getMovement(
-    cursors: Phaser.Types.Input.Keyboard.CursorKeys,
+    cursors: Phaser.Types.Input.Keyboard.CursorKeys | null,
     movementKeys: MovementKeys | null,
-    speed: number
+    speed: number,
+    directionalInput: DirectionalInputState | null = null
 ): MovementVector {
     let vx = 0;
     let vy = 0;
 
-    if (cursors.left.isDown || movementKeys?.left.isDown) vx = -speed;
-    else if (cursors.right.isDown || movementKeys?.right.isDown) vx = speed;
+    const moveLeft = !!(cursors?.left.isDown || movementKeys?.left.isDown || directionalInput?.left);
+    const moveRight = !!(cursors?.right.isDown || movementKeys?.right.isDown || directionalInput?.right);
+    const moveUp = !!(cursors?.up.isDown || movementKeys?.up.isDown || directionalInput?.up);
+    const moveDown = !!(cursors?.down.isDown || movementKeys?.down.isDown || directionalInput?.down);
 
-    if (cursors.up.isDown || movementKeys?.up.isDown) vy = -speed;
-    else if (cursors.down.isDown || movementKeys?.down.isDown) vy = speed;
+    if (moveLeft) vx = -speed;
+    else if (moveRight) vx = speed;
+
+    if (moveUp) vy = -speed;
+    else if (moveDown) vy = speed;
 
     return { vx, vy };
 }

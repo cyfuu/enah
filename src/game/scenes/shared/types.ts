@@ -30,3 +30,10 @@ export interface MovementVector {
     vx: number;
     vy: number;
 }
+
+export interface DirectionalInputState {
+    up: boolean;
+    down: boolean;
+    left: boolean;
+    right: boolean;
+}
