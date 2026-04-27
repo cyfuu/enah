@@ -6,6 +6,15 @@ import { DiaryUI } from './components/DiaryUI';
 import { GalleryUI } from './components/GalleryUI';
 import { Login } from './components/Login';
 
+type DirectionKey = 'up' | 'down' | 'left' | 'right';
+
+interface MobileDirectionState {
+    up: boolean;
+    down: boolean;
+    left: boolean;
+    right: boolean;
+}
+
 function App() {
     const phaserRef = useRef<IRefPhaserGame | null>(null);
     const [userRole, setUserRole] = useState<'boy' | 'girl' | null>(null);
@@ -14,6 +23,55 @@ function App() {
     const [showLetter, setShowLetter] = useState(false);
     const [showDiary, setShowDiary] = useState(false);
     const [showGallery, setShowGallery] = useState(false);
+    const [showMobileControls, setShowMobileControls] = useState(false);
+    const [mobileDirections, setMobileDirections] = useState<MobileDirectionState>({
+        up: false,
+        down: false,
+        left: false,
+        right: false
+    });
+
+    useEffect(() => {
+        const shouldEnableMobileControls = () => {
+            const params = new URLSearchParams(window.location.search);
+            const forced = params.get('mobileControls') === '1';
+            const disabled = params.get('mobileControls') === '0';
+            if (disabled) return false;
+
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const hasCoarsePointer = typeof window.matchMedia === 'function'
+                && window.matchMedia('(any-pointer: coarse)').matches;
+            const mobileUA = /Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+            const smallViewport = Math.min(window.innerWidth, window.innerHeight) <= 900;
+
+            return forced || mobileUA || (hasTouch && (hasCoarsePointer || smallViewport));
+        };
+
+        const updateControlsVisibility = () => {
+            setShowMobileControls(shouldEnableMobileControls());
+        };
+
+        updateControlsVisibility();
+        window.addEventListener('resize', updateControlsVisibility);
+        return () => window.removeEventListener('resize', updateControlsVisibility);
+    }, []);
+
+    useEffect(() => {
+        if (!showMobileControls) return;
+
+        EventBus.emit('mobile-direction-change', mobileDirections);
+    }, [mobileDirections, showMobileControls]);
+
+    useEffect(() => {
+        return () => {
+            EventBus.emit('mobile-direction-change', {
+                up: false,
+                down: false,
+                left: false,
+                right: false
+            });
+        };
+    }, []);
 
     useEffect(() => {
         if (!isAuthed || !userRole) return;
@@ -74,6 +132,33 @@ function App() {
         }
     };
 
+    const setDirection = (direction: DirectionKey, isPressed: boolean) => {
+        setMobileDirections((prev) => {
+            if (prev[direction] === isPressed) return prev;
+            return {
+                ...prev,
+                [direction]: isPressed
+            };
+        });
+    };
+
+    const releaseAllDirections = () => {
+        setMobileDirections({ up: false, down: false, left: false, right: false });
+    };
+
+    const mobileButtonBaseStyle: React.CSSProperties = {
+        border: '2px solid rgba(255, 255, 255, 0.8)',
+        background: 'rgba(0, 0, 0, 0.58)',
+        color: '#ffffff',
+        fontWeight: 700,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        touchAction: 'none',
+        userSelect: 'none',
+        WebkitUserSelect: 'none'
+    };
+
     if (!isAuthed) {
         return <Login onAuth={(role) => {
             setUserRole(role);
@@ -122,6 +207,77 @@ function App() {
                     </svg>
                 )}
             </button>
+
+            {showMobileControls && (
+                <>
+                    <div
+                        style={{
+                            position: 'absolute',
+                            left: '50%',
+                            transform: 'translateX(-190px)',
+                            bottom: '20px',
+                            zIndex: 2000,
+                            width: '152px',
+                            height: '152px',
+                            pointerEvents: 'auto'
+                        }}
+                        onPointerUp={releaseAllDirections}
+                        onPointerCancel={releaseAllDirections}
+                        onPointerLeave={releaseAllDirections}
+                    >
+                        <button
+                            style={{ ...mobileButtonBaseStyle, position: 'absolute', left: '48px', top: '0px', width: '56px', height: '56px', borderRadius: '14px' }}
+                            onPointerDown={() => setDirection('up', true)}
+                            onPointerUp={() => setDirection('up', false)}
+                            onPointerCancel={() => setDirection('up', false)}
+                        >
+                            ▲
+                        </button>
+                        <button
+                            style={{ ...mobileButtonBaseStyle, position: 'absolute', left: '48px', bottom: '0px', width: '56px', height: '56px', borderRadius: '14px' }}
+                            onPointerDown={() => setDirection('down', true)}
+                            onPointerUp={() => setDirection('down', false)}
+                            onPointerCancel={() => setDirection('down', false)}
+                        >
+                            ▼
+                        </button>
+                        <button
+                            style={{ ...mobileButtonBaseStyle, position: 'absolute', left: '0px', top: '48px', width: '56px', height: '56px', borderRadius: '14px' }}
+                            onPointerDown={() => setDirection('left', true)}
+                            onPointerUp={() => setDirection('left', false)}
+                            onPointerCancel={() => setDirection('left', false)}
+                        >
+                            ◀
+                        </button>
+                        <button
+                            style={{ ...mobileButtonBaseStyle, position: 'absolute', right: '0px', top: '48px', width: '56px', height: '56px', borderRadius: '14px' }}
+                            onPointerDown={() => setDirection('right', true)}
+                            onPointerUp={() => setDirection('right', false)}
+                            onPointerCancel={() => setDirection('right', false)}
+                        >
+                            ▶
+                        </button>
+                    </div>
+
+                    <button
+                        style={{
+                            ...mobileButtonBaseStyle,
+                            position: 'absolute',
+                            left: '50%',
+                            transform: 'translateX(118px)',
+                            bottom: '28px',
+                            zIndex: 2000,
+                            width: '72px',
+                            height: '72px',
+                            borderRadius: '50%',
+                            fontSize: '16px'
+                        }}
+                        onPointerDown={() => EventBus.emit('mobile-interact-press')}
+                    >
+                        Use
+                    </button>
+                </>
+            )}
 
             {showLetter && <LetterUI onClose={handleCloseLetter} />}
             {showDiary && <DiaryUI onClose={handleCloseDiary} />}

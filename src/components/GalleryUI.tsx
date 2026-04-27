@@ -173,6 +173,8 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [stickers, setStickers] = useState<Sticker[]>([]);
     const [spread, setSpread] = useState(0);
+    const [uiScale, setUiScale] = useState(1);
+    const [isMobileViewport, setIsMobileViewport] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [hoveredPhotoId, setHoveredPhotoId] = useState<string | null>(null);
     const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
@@ -182,6 +184,26 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
     
     const readyToClose = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const updateScale = () => {
+            const mobile = window.matchMedia('(max-width: 900px)').matches;
+            setIsMobileViewport(mobile);
+            if (!mobile) {
+                setUiScale(1);
+                return;
+            }
+
+            const widthScale = (window.innerWidth - 28) / 1080;
+            const heightScale = (window.innerHeight - 170) / 780;
+            const tunedScale = Math.min(widthScale, heightScale) * 0.88;
+            setUiScale(Math.max(0.42, Math.min(1, tunedScale)));
+        };
+
+        updateScale();
+        window.addEventListener('resize', updateScale);
+        return () => window.removeEventListener('resize', updateScale);
+    }, []);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -441,7 +463,16 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
 
             <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileSelect} />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative' }}>
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+                position: 'relative',
+                transform: `scale(${uiScale})`,
+                transformOrigin: 'top center',
+                marginTop: '56px',
+                marginBottom: '30px'
+            }}>
                 <div style={{
                     padding: '25px 20px',
                     backgroundColor: '#98ab9a',
@@ -453,7 +484,9 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
                         id="album-container"
                         onClick={handleAlbumClick}
                         style={{
-                            display: 'flex', width: '850px', height: '550px',
+                            display: 'flex',
+                            width: '850px',
+                            height: '550px',
                             backgroundColor: '#fdfbf7',
                             borderRadius: '4px', position: 'relative',
                             boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.8), inset 0 0 0 2px rgba(0,0,0,0.05)',
@@ -489,6 +522,46 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
                     </div>
                 </div>
 
+                {isMobileViewport && (
+                    <div style={{
+                        width: '850px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        backgroundColor: 'rgba(255,255,255,0.15)',
+                        padding: '10px 12px',
+                        borderRadius: '12px',
+                        overflowX: 'auto',
+                        overflowY: 'hidden',
+                        boxSizing: 'border-box'
+                    }}>
+                        {EMOJI_LIST.map(emoji => (
+                            <button
+                                key={`mobile-${emoji}`}
+                                onClick={() => setSelectedEmoji(selectedEmoji === emoji ? null : emoji)}
+                                style={{
+                                    flex: '0 0 auto',
+                                    fontSize: '24px',
+                                    background: selectedEmoji === emoji ? 'rgba(255,255,255,0.8)' : 'white',
+                                    border: selectedEmoji === emoji ? '2px solid #98ab9a' : 'none',
+                                    borderRadius: '50%',
+                                    width: '45px',
+                                    height: '45px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    boxShadow: '0 3px 6px rgba(0,0,0,0.15)',
+                                    transform: selectedEmoji === emoji ? 'scale(0.95)' : 'scale(1)',
+                                    transition: 'all 0.1s'
+                                }}
+                            >
+                                {emoji}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 <div style={{ width: '850px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <button onClick={() => setSpread(s => Math.max(0, s - 1))} disabled={spread === 0} style={{ padding: '10px 20px', backgroundColor: 'transparent', border: '1px solid white', color: 'white', cursor: spread === 0 ? 'default' : 'pointer', opacity: spread === 0 ? 0.3 : 1, borderRadius: '4px' }}>
                         &larr; Previous Page
@@ -502,11 +575,19 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
                 </div>
             </div>
 
+            {!isMobileViewport && (
             <div style={{ 
-                position: 'fixed', right: '40px', top: '50%', transform: 'translateY(-50%)',
-                width: '130px', display: 'flex', justifyContent: 'center', gap: '12px', 
+                position: 'fixed', right: '40px', top: '50%', transform: `translateY(-50%) scale(${uiScale})`,
+                transformOrigin: 'right center',
+                width: '130px',
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '12px', 
                 backgroundColor: 'rgba(255,255,255,0.15)', padding: '20px 15px', borderRadius: '12px', 
-                flexWrap: 'wrap', backdropFilter: 'blur(5px)', boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
+                flexWrap: 'wrap',
+                backdropFilter: 'blur(5px)',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                zIndex: 100000
             }}>
                 <div style={{ width: '100%', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.3)', paddingBottom: '10px', marginBottom: '5px', color: 'white', fontSize: '12px', letterSpacing: '1px', textTransform: 'uppercase' }}>
                     Stickers
@@ -529,6 +610,7 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
                     </button>
                 ))}
             </div>
+            )}
 
             {pendingFile && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 }}>
