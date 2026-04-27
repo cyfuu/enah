@@ -173,7 +173,7 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                 backgroundColor: 'rgba(0,0,0,0.85)',
                 display: 'flex',
                 justifyContent: 'center',
-                alignItems: 'flex-start',
+                alignItems: 'center',
                 padding: '12px',
                 boxSizing: 'border-box',
                 overflowY: 'auto'
@@ -201,10 +201,8 @@ export const DiaryUI = ({ onClose }: { onClose: () => void }) => {
                 boxShadow: '0 10px 30px rgba(0,0,0,0.7), inset 0 0 15px rgba(0,0,0,0.5)',
                 position: 'relative',
                 border: '3px solid #3e2723',
-                marginTop: '62px',
-                marginBottom: '90px',
                 transform: `scale(${uiScale})`,
-                transformOrigin: 'top center'
+                transformOrigin: 'center center'
             }}>
                 <div style={{ position: 'absolute', top: '10px', left: '10px', width: '20px', height: '20px', borderTop: '2px solid #af9b60', borderLeft: '2px solid #af9b60', borderRadius: '5px 0 0 0' }}/>
                 <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '20px', height: '20px', borderBottom: '2px solid #af9b60', borderRight: '2px solid #af9b60', borderRadius: '0 0 5px 0' }}/>

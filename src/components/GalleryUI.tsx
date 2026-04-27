@@ -469,9 +469,7 @@ export const GalleryUI = ({ onClose }: { onClose: () => void }) => {
                 gap: '20px',
                 position: 'relative',
                 transform: `scale(${uiScale})`,
-                transformOrigin: 'top center',
-                marginTop: '56px',
-                marginBottom: '30px'
+                transformOrigin: 'center center'
             }}>
                 <div style={{
                     padding: '25px 20px',
